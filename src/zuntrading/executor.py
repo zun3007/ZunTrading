@@ -101,13 +101,31 @@ class PaperExecutor:
 
 
 class MT5Executor:
-    """Đặt lệnh thật trên terminal MT5 (Exness DEMO). Import + login lazy."""
+    """Đặt lệnh trên terminal MT5 (Exness). mode='demo' dùng MT5_*, mode='live' dùng MT5_LIVE_*.
+
+    Sau khi connect LUÔN đối chiếu account login thật của terminal với creds yêu cầu —
+    không bao giờ đặt lệnh nhầm tài khoản.
+    """
 
     name = "mt5"
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, mode: str = "demo"):
         self.settings = settings
+        self.mode = mode
         self._connected = False
+
+    def _creds(self):
+        if self.mode == "live":
+            creds = self.settings.mt5_live
+            if not creds.present:
+                raise ExecutorUnavailable(
+                    "mode LIVE nhưng thiếu MT5_LIVE_LOGIN/MT5_LIVE_PASSWORD/MT5_LIVE_SERVER"
+                )
+            return creds
+        creds = self.settings.mt5
+        if not creds.present:
+            raise ExecutorUnavailable("thiếu MT5_LOGIN/MT5_PASSWORD/MT5_SERVER trong .env")
+        return creds
 
     def _mt5(self):
         try:
@@ -115,14 +133,19 @@ class MT5Executor:
         except ImportError as e:
             raise ExecutorUnavailable("package MetaTrader5 chưa cài") from e
         if not self._connected:
-            creds = self.settings.mt5
-            if not creds.present:
-                raise ExecutorUnavailable("thiếu MT5_LOGIN/MT5_PASSWORD/MT5_SERVER trong .env")
+            creds = self._creds()
             ok = mt5.initialize(
                 login=int(creds.login), password=creds.password, server=creds.server
             )
             if not ok:
                 raise ExecutorUnavailable(f"mt5.initialize fail: {mt5.last_error()}")
+            info = mt5.account_info()
+            if info is None or int(info.login) != int(creds.login):
+                got = getattr(info, "login", None)
+                mt5.shutdown()
+                raise ExecutorUnavailable(
+                    f"terminal đang ở account {got}, không phải {creds.login} ({self.mode}) — từ chối đặt lệnh"
+                )
             self._connected = True
         return mt5
 

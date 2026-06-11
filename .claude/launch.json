@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "zuntrading-ui",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "zuntrading.api:app", "--host", "127.0.0.1", "--port", "8420"],
+      "port": 8420
+    }
+  ]
+}

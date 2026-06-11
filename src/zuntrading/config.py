@@ -92,6 +92,7 @@ class Settings:
     report_at_local: str
     telegram: TelegramConfig
     mt5: MT5Credentials
+    mt5_live: MT5Credentials
     anthropic_api_key: str
 
     def symbols_for_session_check(self) -> list[SymbolConfig]:
@@ -200,6 +201,11 @@ def load_settings(
             login=os.environ.get("MT5_LOGIN", ""),
             password=os.environ.get("MT5_PASSWORD", ""),
             server=os.environ.get("MT5_SERVER", ""),
+        ),
+        mt5_live=MT5Credentials(
+            login=os.environ.get("MT5_LIVE_LOGIN", ""),
+            password=os.environ.get("MT5_LIVE_PASSWORD", ""),
+            server=os.environ.get("MT5_LIVE_SERVER", ""),
         ),
         anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
     )

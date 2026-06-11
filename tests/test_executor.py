@@ -122,15 +122,19 @@ class FakeMT5:
     def __init__(self):
         self.sent = []
         self.retcode = self.TRADE_RETCODE_DONE
+        self.login = 12345  # khớp MT5_LOGIN trong fixture
 
     def initialize(self, **kw):
+        return True
+
+    def shutdown(self):
         return True
 
     def last_error(self):
         return (0, "ok")
 
     def account_info(self):
-        return SimpleNamespace(equity=10_000.0)
+        return SimpleNamespace(equity=10_000.0, login=self.login)
 
     def symbol_info(self, name):
         return SimpleNamespace(trade_tick_value=1.0, trade_tick_size=0.01, filling_mode=2)
@@ -221,4 +225,19 @@ def test_mt5_missing_creds_raises(monkeypatch, tmp_path):
         monkeypatch.delenv(var, raising=False)
     ex = MT5Executor(mt5_settings(tmp_path))
     with pytest.raises(ExecutorUnavailable, match="MT5_LOGIN"):
+        ex.equity()
+
+
+def test_mt5_wrong_terminal_account_refused(fake_mt5, tmp_path):
+    fake_mt5.login = 88888  # terminal đang login account khác
+    ex = MT5Executor(mt5_settings(tmp_path))
+    with pytest.raises(ExecutorUnavailable, match="88888"):
+        ex.equity()
+
+
+def test_mt5_live_mode_requires_live_creds(fake_mt5, tmp_path, monkeypatch):
+    for var in ("MT5_LIVE_LOGIN", "MT5_LIVE_PASSWORD", "MT5_LIVE_SERVER"):
+        monkeypatch.delenv(var, raising=False)
+    ex = MT5Executor(mt5_settings(tmp_path), mode="live")
+    with pytest.raises(ExecutorUnavailable, match="MT5_LIVE"):
         ex.equity()

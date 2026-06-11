@@ -1,7 +1,9 @@
 # ZunTrading — Design Spec
 
-- **Date:** 2026-06-11 (rev 2 — pivot executor sang Exness MT5, user approved)
-- **Status:** Approved. Đang implement.
+- **Date:** 2026-06-11 (rev 3)
+- **Rev 3:** Telegram → tùy chọn; thêm **local dashboard** (FastAPI + vanilla, http://127.0.0.1:8420) làm kênh theo dõi/điều khiển chính: equity curve, positions, signals (kèm lý do reject), pause/scan, và **mode DEMO⇄LIVE** với guardrails: mặc định demo vĩnh viễn (file state hỏng → demo), creds live tách riêng (`MT5_LIVE_*`), confirm phrase "TRADE LIVE" + hiển thị readiness (số liệu demo + cảnh báo), executor đối chiếu account login terminal trước mọi lệnh, mode live KHÔNG fallback paper lặng lẽ. Non-goal "không tiền thật" được thay bằng: **demo-first, chuyển live là hành động có ý thức của user qua friction có chủ đích** — bot không bao giờ tự chuyển.
+- **Rev 2:** pivot executor sang Exness MT5, user approved.
+- **Status:** Implemented.
 - **Owner:** Zun
 
 ## 1. Mục tiêu

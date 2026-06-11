@@ -1,13 +1,23 @@
 # ZunTrading 🤖
 
-Bot trade tự động trên **Exness MT5 Demo** — não Claude, risk gate bằng code cứng, báo cáo Telegram. Chạy 24/7 trên máy Windows.
+Bot trade tự động trên **Exness MT5** — não Claude, risk gate bằng code cứng, **dashboard local** theo dõi và điều khiển. Chạy 24/7 trên máy Windows. Demo mặc định; chuyển Live có bước xác nhận riêng.
 
 ```
 Data (MT5/Binance/yfinance) → Indicators → Pre-filter (code)
   → Claude triage (haiku) → Claude decision (sonnet)
   → RISK GATE (code thuần, LLM không override được)
-  → Lệnh MT5 demo (SL/TP nằm trên server) → Journal SQLite → Telegram
+  → Lệnh MT5 (SL/TP nằm trên server) → Journal SQLite → Dashboard (+ Telegram tùy chọn)
 ```
+
+## Dashboard
+
+```powershell
+.\scripts\run_ui.ps1     # mở http://127.0.0.1:8420
+```
+
+- **Equity curve**, vị thế mở, lịch sử lệnh (kèm thắng/thua), mọi signal kể cả bị risk gate chặn (với lý do).
+- Nút **Scan ngay** / **Tạm dừng** (pause = bot bỏ cycle nhưng lệnh mở vẫn có SL/TP trên server).
+- **DEMO ⇄ LIVE**: click badge. Chuyển LIVE bắt buộc: tài khoản live riêng trong `.env`, nhìn số liệu demo của chính bot (lệnh đóng, win rate, P&L, cảnh báo đỏ nếu mẫu nhỏ/đang lỗ), và gõ đúng `TRADE LIVE`. Khi LIVE: viền đỏ trên cùng + badge đỏ — không thể nhìn nhầm. Live KHÔNG BAO GIỜ fallback lặng lẽ về paper; sai account là bot từ chối đặt lệnh.
 
 **Đọc 3 dòng này trước:**
 - Bot chạy **tài khoản DEMO** (tiền ảo). Số liệu sau 2–4 tuần mới là căn cứ để cân nhắc bất cứ gì xa hơn — quyết định đó là của bạn, không phải của bot.

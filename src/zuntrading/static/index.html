@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ZunTrading</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body data-mode="demo">
+  <div id="liveStrip" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">ZUN<span>/</span>TRADING</div>
+    <button id="modeBadge" class="badge badge-demo" title="Đổi chế độ demo/live">DEMO</button>
+    <div class="ticker">
+      <div class="ticker-item">
+        <span class="label">Equity (paper)</span>
+        <span class="num num-xl" id="equity">—</span>
+      </div>
+      <div class="ticker-item">
+        <span class="label">P&amp;L hôm nay</span>
+        <span class="num num-lg" id="todayPnl">—</span>
+      </div>
+      <div class="ticker-item">
+        <span class="label">Lệnh mở</span>
+        <span class="num num-lg" id="openCount">—</span>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="scanBtn" class="btn btn-primary">Scan ngay</button>
+      <button id="pauseBtn" class="btn">Tạm dừng</button>
+    </div>
+  </header>
+
+  <div id="connBanner" class="banner banner-error" hidden>Mất kết nối server — đang thử lại…</div>
+  <div id="pauseBanner" class="banner banner-warn" hidden>Bot đang TẠM DỪNG — không quét, không vào lệnh. Lệnh đang mở vẫn có SL/TP trên server.</div>
+
+  <main class="layout">
+    <section class="col-main">
+      <div class="card">
+        <div class="card-head">
+          <h2>Đường equity</h2>
+          <span class="hint" id="curveHint"></span>
+        </div>
+        <div id="chart" class="chart"></div>
+        <div id="chartEmpty" class="empty" hidden>
+          Chưa có lệnh đóng nào — đường equity sẽ tự vẽ khi có kết quả đầu tiên.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="positions" role="tab">Vị thế mở</button>
+          <button class="tab" data-tab="orders" role="tab">Lịch sử lệnh</button>
+          <button class="tab" data-tab="signals" role="tab">Signals</button>
+          <button class="tab" data-tab="logs" role="tab">Log</button>
+        </div>
+        <div id="tab-positions" class="tab-panel active"></div>
+        <div id="tab-orders" class="tab-panel"></div>
+        <div id="tab-signals" class="tab-panel"></div>
+        <div id="tab-logs" class="tab-panel"><pre id="logBox" class="logbox"></pre></div>
+      </div>
+    </section>
+
+    <aside class="col-side">
+      <div class="card">
+        <div class="card-head"><h2>Hôm nay</h2><span class="hint" id="dayLabel"></span></div>
+        <div class="stat-grid" id="todayStats"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Risk gate</h2><span class="hint">code cứng — LLM không override được</span></div>
+        <ul class="risk-list" id="riskList"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Calibration</h2><span class="hint">ngưỡng confidence theo bằng chứng</span></div>
+        <div class="stat-grid" id="calGrid"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Hệ thống</h2></div>
+        <div class="sys" id="sysInfo"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Modal chuyển mode -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h3 id="modalTitle">Chuyển sang LIVE</h3>
+      <div id="modalBody"></div>
+      <div class="modal-actions">
+        <button class="btn" id="modalCancel">Hủy</button>
+        <button class="btn btn-danger" id="modalConfirm" disabled>Chuyển sang LIVE</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/vendor/lightweight-charts.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from . import brain, notify
+from . import brain, mode, notify
 from .calibration import threshold_for
 from .config import Settings, SymbolConfig, load_settings
 from .data import get_candles, market_open
@@ -56,15 +56,22 @@ def setup_logging(level: int = logging.INFO) -> None:
 
 
 def pick_executor(settings: Settings, journal: Journal, choice: str):
-    """auto: MT5 nếu đủ điều kiện, ngược lại paper (log rõ vì sao)."""
+    """auto: theo mode. DEMO cho phép fallback paper; LIVE thì KHÔNG BAO GIỜ fallback lặng lẽ."""
+    current_mode = mode.get_mode()
     if choice == "paper":
         return PaperExecutor(settings, journal)
     if choice == "mt5":
-        return MT5Executor(settings)
+        return MT5Executor(settings, current_mode)
     # auto
+    if current_mode == "live":
+        # live: MT5 hoặc không gì cả — fallback paper lặng lẽ ở mode live là silent failure
+        ex = MT5Executor(settings, "live")
+        ex.equity()  # raise ExecutorUnavailable nếu không sẵn sàng → abort cycle
+        log.info("executor=mt5 LIVE (login %s)", settings.mt5_live.login)
+        return ex
     if settings.mt5.present:
         try:
-            ex = MT5Executor(settings)
+            ex = MT5Executor(settings, "demo")
             ex.equity()  # probe kết nối thật
             log.info("executor=mt5 (Exness demo, login %s)", settings.mt5.login)
             return ex
@@ -146,6 +153,11 @@ def run_cycle(
     profile_name: str, settings: Settings, journal: Journal, executor, dry_run: bool = False
 ) -> CycleStats:
     stats = CycleStats()
+
+    if mode.is_paused():
+        log.info("bot đang PAUSED — bỏ cycle %s", profile_name)
+        journal.heartbeat(profile_name, 0, 0, 0, 0)
+        return stats
 
     # 0. chốt outcome các lệnh đã đóng từ cycle trước
     try:
