@@ -36,6 +36,16 @@ def fake_candles(sym, timeframe, n=200, sources=None):
     )
 
 
+@pytest.fixture(autouse=True)
+def isolated_run_state(tmp_path, monkeypatch):
+    """Pause/mode flags là runtime state của máy — test không được phụ thuộc."""
+    from zuntrading import mode
+
+    monkeypatch.setattr(mode, "DATA_DIR", tmp_path / "state")
+    monkeypatch.setattr(mode, "MODE_FILE", tmp_path / "state" / "mode.json")
+    monkeypatch.setattr(mode, "PAUSE_FILE", tmp_path / "state" / "paused.flag")
+
+
 @pytest.fixture
 def j(tmp_path):
     journal = Journal(tmp_path / "t.db")
