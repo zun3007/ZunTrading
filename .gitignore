@@ -16,3 +16,4 @@ data/*.db
 data/*.sqlite*
 logs/
 *.log
+src/*.egg-info/
