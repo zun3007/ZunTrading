@@ -184,6 +184,58 @@ def test_risk_profile_endpoint_rejects_unknown(client, env):
     assert r.status_code == 400
 
 
+# --- MT5 config qua UI ---
+
+@pytest.fixture
+def env_file(env, monkeypatch):
+    env_path = env["tmp"] / ".env"
+    monkeypatch.setattr(api, "ENV_PATH", env_path)
+    # placeholder để monkeypatch tự restore os.environ sau test (load_dotenv override sẽ đè)
+    for var in ("MT5_LOGIN", "MT5_PASSWORD", "MT5_SERVER",
+                "MT5_LIVE_LOGIN", "MT5_LIVE_PASSWORD", "MT5_LIVE_SERVER"):
+        monkeypatch.setenv(var, "")
+    return env_path
+
+
+def test_mt5_config_post_writes_env_and_activates(client, env_file):
+    r = client.post("/api/mt5-config", json={
+        "target": "demo", "login": "123456789", "password": "s3cr#t \"q\"", "server": "Exness-MT5Trial14",
+    })
+    assert r.status_code == 200 and r.json()["demo_configured"] is True
+    content = env_file.read_text(encoding="utf-8")
+    assert 'MT5_LOGIN="123456789"' in content
+    assert "Exness-MT5Trial14" in content
+    assert "s3cr#t" in content  # password quote JSON-style sống được ký tự đặc biệt
+    s = client.get("/api/status").json()
+    assert s["mt5_demo_configured"] is True and s["mt5_live_configured"] is False
+
+
+def test_mt5_config_get_never_returns_password(client, env_file):
+    client.post("/api/mt5-config", json={
+        "target": "live", "login": "999", "password": "topsecret", "server": "Exness-MT5Real8",
+    })
+    data = client.get("/api/mt5-config").json()
+    assert data["live"]["password_set"] is True
+    assert "topsecret" not in str(data)
+
+
+def test_mt5_config_rejects_non_numeric_login(client, env_file):
+    r = client.post("/api/mt5-config", json={
+        "target": "demo", "login": "abc", "password": "x", "server": "s",
+    })
+    assert r.status_code == 400 and "dãy số" in r.json()["detail"]
+
+
+def test_mt5_config_preserves_other_env_lines(client, env_file):
+    env_file.write_text("# comment giữ nguyên\nTELEGRAM_BOT_TOKEN=abc\n", encoding="utf-8")
+    client.post("/api/mt5-config", json={
+        "target": "demo", "login": "111", "password": "p", "server": "s1",
+    })
+    content = env_file.read_text(encoding="utf-8")
+    assert "# comment giữ nguyên" in content
+    assert "TELEGRAM_BOT_TOKEN=abc" in content
+
+
 def test_index_serves_html(client, env):
     r = client.get("/")
     assert r.status_code == 200

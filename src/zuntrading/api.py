@@ -15,6 +15,7 @@ import threading
 from collections import deque
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -57,6 +58,39 @@ class ModeBody(BaseModel):
 
 class RiskProfileBody(BaseModel):
     profile: str
+
+
+class MT5ConfigBody(BaseModel):
+    target: str = "demo"  # demo | live
+    login: str
+    password: str
+    server: str
+
+
+ENV_PATH = Path(".env")
+
+
+def _update_env_file(updates: dict[str, str]) -> None:
+    """Update/append KEY=VALUE trong .env, giữ nguyên các dòng khác. Value quote JSON-style."""
+    import json as _json
+
+    lines = ENV_PATH.read_text(encoding="utf-8").splitlines() if ENV_PATH.exists() else []
+    seen: set[str] = set()
+    out: list[str] = []
+    for ln in lines:
+        key = None
+        if "=" in ln and not ln.lstrip().startswith("#"):
+            key = ln.split("=", 1)[0].strip()
+        if key in updates:
+            out.append(f"{key}={_json.dumps(updates[key])}")
+            seen.add(key)
+        else:
+            out.append(ln)
+    for k, v in updates.items():
+        if k not in seen:
+            out.append(f"{k}={_json.dumps(v)}")
+    ENV_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
+    load_dotenv(ENV_PATH, override=True)  # refresh env của process UI ngay lập tức
 
 
 class ScanBody(BaseModel):
@@ -206,6 +240,38 @@ def logs(lines: int = 120):
 def set_pause(body: PauseBody):
     runmode.set_paused(body.paused)
     return {"paused": runmode.is_paused()}
+
+
+@app.get("/api/mt5-config")
+def get_mt5_config():
+    """Trả login/server hiện tại — KHÔNG BAO GIỜ trả password, chỉ trạng thái đã đặt."""
+    s = get_settings()
+    return {
+        "demo": {"login": s.mt5.login, "server": s.mt5.server, "password_set": bool(s.mt5.password)},
+        "live": {"login": s.mt5_live.login, "server": s.mt5_live.server,
+                 "password_set": bool(s.mt5_live.password)},
+    }
+
+
+@app.post("/api/mt5-config")
+def set_mt5_config(body: MT5ConfigBody):
+    if body.target not in ("demo", "live"):
+        raise HTTPException(status_code=400, detail="target phải là demo hoặc live")
+    login = body.login.strip()
+    server = body.server.strip()
+    if not login.isdigit():
+        raise HTTPException(status_code=400, detail="MT5 login là dãy số (xem email Exness)")
+    if not server or not body.password:
+        raise HTTPException(status_code=400, detail="thiếu server hoặc password")
+    prefix = "MT5_" if body.target == "demo" else "MT5_LIVE_"
+    _update_env_file({
+        f"{prefix}LOGIN": login,
+        f"{prefix}PASSWORD": body.password,
+        f"{prefix}SERVER": server,
+    })
+    log.warning("MT5 %s config updated (login %s, server %s)", body.target, login, server)
+    s = get_settings()
+    return {"ok": True, "demo_configured": s.mt5.present, "live_configured": s.mt5_live.present}
 
 
 @app.post("/api/risk-profile")

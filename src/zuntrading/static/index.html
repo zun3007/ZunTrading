@@ -83,7 +83,7 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h2>Hệ thống</h2></div>
+        <div class="card-head"><h2>Hệ thống</h2><button id="mt5SetupBtn" class="btn btn-sm">⚙ Cài MT5</button></div>
         <div class="sys" id="sysInfo"></div>
       </div>
     </aside>
@@ -97,6 +97,25 @@
       <div class="modal-actions">
         <button class="btn" id="modalCancel">Hủy</button>
         <button class="btn btn-danger" id="modalConfirm" disabled>Chuyển sang LIVE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal cài MT5 -->
+  <div id="mt5Modal" class="modal" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="mt5Title">
+      <h3 id="mt5Title">Cài đặt tài khoản MT5</h3>
+      <p class="form-hint">Số liệu từ email Exness sau khi tạo tài khoản. Lưu vào <code>.env</code> trên máy này — không đi đâu khác.</p>
+      <div class="seg" style="margin:0 0 12px">
+        <button type="button" data-target="demo" class="active">Demo</button>
+        <button type="button" data-target="live" class="seg-danger">Live</button>
+      </div>
+      <label class="form-label">Login (dãy số)<input id="mt5Login" class="confirm-input" inputmode="numeric" autocomplete="off" placeholder="ví dụ 123456789" /></label>
+      <label class="form-label">Password<input id="mt5Password" type="password" class="confirm-input" autocomplete="new-password" /></label>
+      <label class="form-label">Server<input id="mt5Server" class="confirm-input" autocomplete="off" placeholder="ví dụ Exness-MT5Trial14" /></label>
+      <div class="modal-actions">
+        <button class="btn" id="mt5Cancel">Hủy</button>
+        <button class="btn btn-primary" id="mt5Save">Lưu</button>
       </div>
     </div>
   </div>

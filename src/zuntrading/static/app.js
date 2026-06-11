@@ -265,6 +265,49 @@ $("#modalConfirm").addEventListener("click", async () => {
   }
 });
 
+/* ---------- MT5 setup modal ---------- */
+let mt5Target = "demo";
+
+async function syncMt5Form() {
+  const cfg = await api("/api/mt5-config");
+  document.querySelectorAll("#mt5Modal .seg button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.target === mt5Target));
+  const cur = cfg[mt5Target];
+  $("#mt5Login").value = cur.login || "";
+  $("#mt5Server").value = cur.server || "";
+  $("#mt5Password").value = "";
+  $("#mt5Password").placeholder = cur.password_set ? "•••••• (đã đặt — nhập để thay)" : "mật khẩu trading";
+}
+
+$("#mt5SetupBtn").addEventListener("click", async () => {
+  mt5Target = "demo";
+  await syncMt5Form();
+  $("#mt5Modal").hidden = false;
+  $("#mt5Login").focus();
+});
+document.querySelectorAll("#mt5Modal .seg button").forEach((b) =>
+  b.addEventListener("click", async () => { mt5Target = b.dataset.target; await syncMt5Form(); })
+);
+$("#mt5Cancel").addEventListener("click", () => ($("#mt5Modal").hidden = true));
+$("#mt5Modal").addEventListener("click", (e) => { if (e.target === $("#mt5Modal")) $("#mt5Modal").hidden = true; });
+$("#mt5Save").addEventListener("click", async () => {
+  try {
+    await api("/api/mt5-config", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        target: mt5Target,
+        login: $("#mt5Login").value,
+        password: $("#mt5Password").value,
+        server: $("#mt5Server").value,
+      }),
+    });
+    $("#mt5Modal").hidden = true;
+    refresh();
+  } catch (e) {
+    alert("Không lưu được: " + (JSON.parse(e.body || "{}").detail || e.message));
+  }
+});
+
 /* ---------- Poll loop ---------- */
 async function refresh() {
   try {
