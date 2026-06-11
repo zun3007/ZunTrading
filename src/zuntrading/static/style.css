@@ -173,6 +173,20 @@ tbody tr:hover { background: var(--surface-2); }
 .stat .label { display: block; margin-bottom: 3px; }
 .stat .num { font-size: 16px; font-weight: 600; }
 
+.seg {
+  display: grid; grid-auto-flow: column; gap: 1px;
+  margin: 12px 16px 0; border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); overflow: hidden; background: var(--line-strong);
+}
+.seg button {
+  font: 500 11.5px var(--font-ui); color: var(--text-3); letter-spacing: 0.02em;
+  background: var(--surface); border: none; padding: 7px 4px; cursor: pointer;
+  transition: all var(--dur) var(--ease);
+}
+.seg button:hover { color: var(--text-2); background: var(--surface-2); }
+.seg button.active { color: var(--text); background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--accent); }
+.seg button.active.seg-danger { box-shadow: inset 0 -2px 0 var(--short); color: #ffd6d6; }
+
 .risk-list { list-style: none; margin: 8px 0 12px; padding: 0 16px; }
 .risk-list li {
   display: flex; justify-content: space-between; gap: 12px;

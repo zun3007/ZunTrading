@@ -85,6 +85,8 @@ class MT5Credentials:
 class Settings:
     reference_equity: float
     risk: RiskConfig
+    risk_profile_name: str
+    risk_profile_names: list[str]
     models: ModelConfig
     profiles: dict[str, Profile]
     symbols: list[SymbolConfig]
@@ -108,9 +110,32 @@ def _pct_ok(v: float) -> bool:
     return 0 < v <= 10
 
 
+RISK_PROFILE_STATE = Path("data/risk_profile.json")
+
+
+def _resolve_risk_profile(raw: dict, override: str | None) -> tuple[dict, str]:
+    """Chọn block risk theo: override param > state file > active_risk_profile > 'risk' cũ."""
+    profiles = raw.get("risk_profiles")
+    if not profiles:
+        return raw["risk"], "custom"  # config kiểu cũ (1 block risk)
+    name = override
+    if name is None and RISK_PROFILE_STATE.exists():
+        try:
+            import json as _json
+
+            name = _json.loads(RISK_PROFILE_STATE.read_text(encoding="utf-8")).get("profile")
+        except (OSError, ValueError):
+            name = None
+    if name is None:
+        name = raw.get("active_risk_profile", "can_bang")
+    _require(name in profiles, f"risk profile '{name}' không tồn tại (có: {sorted(profiles)})")
+    return profiles[name], name
+
+
 def load_settings(
     config_path: str | Path = "config.yaml",
     env_path: str | Path | None = ".env",
+    risk_profile: str | None = None,
 ) -> Settings:
     config_path = Path(config_path)
     _require(config_path.exists(), f"không tìm thấy {config_path}")
@@ -119,7 +144,7 @@ def load_settings(
     if env_path is not None and Path(env_path).exists():
         load_dotenv(env_path, override=False)
 
-    risk_raw = raw["risk"]
+    risk_raw, profile_name = _resolve_risk_profile(raw, risk_profile)
     risk = RiskConfig(
         max_risk_per_trade_pct=float(risk_raw["max_risk_per_trade_pct"]),
         max_total_open_risk_pct=float(risk_raw["max_total_open_risk_pct"]),
@@ -188,6 +213,8 @@ def load_settings(
     return Settings(
         reference_equity=float(raw["account"]["reference_equity"]),
         risk=risk,
+        risk_profile_name=profile_name,
+        risk_profile_names=sorted(raw.get("risk_profiles", {})),
         models=models,
         profiles=profiles,
         symbols=symbols,

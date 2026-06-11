@@ -98,7 +98,7 @@ function renderStatus(s) {
     ["P&L", fmtUsd(sum.realized_pnl)], ["Heartbeats", sum.heartbeats],
   ].map(([l, v]) => `<div class="stat"><span class="label">${l}</span><span class="num">${v}</span></div>`).join("");
 
-  // Risk gate
+  // Risk gate + profile switch
   const r = s.risk;
   $("#riskList").innerHTML = [
     ["Risk mỗi lệnh", `≤ ${r.max_risk_per_trade_pct}%`],
@@ -106,6 +106,20 @@ function renderStatus(s) {
     ["RR tối thiểu", r.min_rr], ["Lệnh/ngày/market", `≤ ${r.max_trades_per_day_per_market}`],
     ["Dừng khi lỗ ngày", `${r.daily_loss_stop_pct}%`],
   ].map(([l, v]) => `<li><span>${l}</span><span class="num">${v}</span></li>`).join("");
+
+  const PROFILE_LABELS = { an_toan: "An toàn", can_bang: "Cân bằng", mao_hiem: "Mạo hiểm" };
+  $("#riskProfileSeg").innerHTML = (s.risk_profiles || []).map((p) =>
+    `<button data-profile="${esc(p)}" class="${p === s.risk_profile ? "active" : ""} ${p === "mao_hiem" ? "seg-danger" : ""}"
+      role="radio" aria-checked="${p === s.risk_profile}">${PROFILE_LABELS[p] || esc(p)}</button>`).join("");
+  document.querySelectorAll("#riskProfileSeg button").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const p = b.dataset.profile;
+      if (p === s.risk_profile) return;
+      if (p === "mao_hiem" && !confirm("Mạo hiểm = risk 2%/lệnh, dừng ngày ở 5%. Lỗ NHANH HƠN khi sai. Chắc chưa?")) return;
+      await api("/api/risk-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile: p }) });
+      refresh();
+    })
+  );
 
   // Hệ thống
   const hb = s.last_heartbeat;

@@ -71,6 +71,20 @@ def get_state() -> RunState:
     return RunState(mode=get_mode(), paused=is_paused())
 
 
+def set_risk_profile(name: str, settings: Settings) -> None:
+    if name not in settings.risk_profile_names:
+        raise ValueError(
+            f"profile '{name}' không tồn tại (có: {settings.risk_profile_names})"
+        )
+    from .config import RISK_PROFILE_STATE
+
+    RISK_PROFILE_STATE.parent.mkdir(parents=True, exist_ok=True)
+    RISK_PROFILE_STATE.write_text(
+        json.dumps({"profile": name, "changed_at": datetime.now(UTC).isoformat()}),
+        encoding="utf-8",
+    )
+
+
 def live_readiness(journal: Journal, settings: Settings) -> dict:
     """Số liệu demo + cảnh báo — hiển thị trong modal chuyển LIVE. Không chặn, chỉ soi gương."""
     rows = journal.conn.execute(

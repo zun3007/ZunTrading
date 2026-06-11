@@ -46,9 +46,12 @@ def write_cfg(tmp_path, **kw):
 
 
 def test_load_real_repo_config():
-    s = load_settings(REAL_CONFIG, env_path=None)
+    # risk_profile override để test không phụ thuộc state file data/risk_profile.json
+    s = load_settings(REAL_CONFIG, env_path=None, risk_profile="can_bang")
     assert s.risk.max_risk_per_trade_pct == 1.0
     assert s.risk.min_rr == 1.5
+    assert s.risk_profile_name == "can_bang"
+    assert s.risk_profile_names == ["an_toan", "can_bang", "mao_hiem"]
     assert set(s.profiles) == {"day", "swing"}
     mt5_names = {sym.mt5 for sym in s.symbols}
     assert mt5_names == {"XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD", "USTEC", "US30"}
@@ -94,3 +97,35 @@ def test_missing_telegram_env_is_not_fatal(tmp_path, monkeypatch):
     s = load_settings(write_cfg(tmp_path), env_path=None)
     assert not s.telegram.present
     assert not s.mt5.present
+
+
+def test_risk_profiles_resolution_order(tmp_path, monkeypatch):
+    import zuntrading.config as cfg
+
+    monkeypatch.setattr(cfg, "RISK_PROFILE_STATE", tmp_path / "rp.json")
+    # override param thắng tất
+    s = load_settings(REAL_CONFIG, env_path=None, risk_profile="an_toan")
+    assert s.risk.max_risk_per_trade_pct == 0.5 and s.risk.min_rr == 2.0
+    # state file thắng active_risk_profile trong yaml
+    (tmp_path / "rp.json").write_text('{"profile": "mao_hiem"}', encoding="utf-8")
+    s = load_settings(REAL_CONFIG, env_path=None)
+    assert s.risk_profile_name == "mao_hiem"
+    assert s.risk.max_risk_per_trade_pct == 2.0
+    assert s.risk.daily_loss_stop_pct == 5.0
+    # state file rác → fallback yaml active (can_bang)
+    (tmp_path / "rp.json").write_text("{hỏng", encoding="utf-8")
+    assert load_settings(REAL_CONFIG, env_path=None).risk_profile_name == "can_bang"
+
+
+def test_unknown_risk_profile_raises(tmp_path, monkeypatch):
+    import zuntrading.config as cfg
+
+    monkeypatch.setattr(cfg, "RISK_PROFILE_STATE", tmp_path / "rp.json")
+    with pytest.raises(ValueError, match="không tồn tại"):
+        load_settings(REAL_CONFIG, env_path=None, risk_profile="all_in")
+
+
+def test_legacy_single_risk_block_still_works(tmp_path):
+    s = load_settings(write_cfg(tmp_path), env_path=None)  # MINIMAL dùng block `risk:` cũ
+    assert s.risk_profile_name == "custom"
+    assert s.risk_profile_names == []

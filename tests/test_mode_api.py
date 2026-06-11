@@ -24,15 +24,19 @@ OK = Verdict(approved=True, lots=0.25, risk_amount=100.0, reject_reasons=[])
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     """Cô lập mode files + journal vào tmp; settings không Telegram/MT5."""
+    import zuntrading.config as cfg
+
     monkeypatch.setattr(mode, "DATA_DIR", tmp_path)
     monkeypatch.setattr(mode, "MODE_FILE", tmp_path / "mode.json")
     monkeypatch.setattr(mode, "PAUSE_FILE", tmp_path / "paused.flag")
+    monkeypatch.setattr(cfg, "RISK_PROFILE_STATE", tmp_path / "risk_profile.json")
     for var in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "MT5_LOGIN", "MT5_PASSWORD",
                 "MT5_SERVER", "MT5_LIVE_LOGIN", "MT5_LIVE_PASSWORD", "MT5_LIVE_SERVER"):
         monkeypatch.delenv(var, raising=False)
     settings = load_settings(REPO_CONFIG, env_path=None)
     db = tmp_path / "j.db"
-    monkeypatch.setattr(api, "get_settings", lambda: settings)
+    # get_settings load ĐỘNG như production — risk profile switch có hiệu lực ngay
+    monkeypatch.setattr(api, "get_settings", lambda: load_settings(REPO_CONFIG, env_path=None))
     monkeypatch.setattr(api, "get_journal", lambda: Journal(db))
     return {"settings": settings, "db": db, "tmp": tmp_path}
 
@@ -163,6 +167,20 @@ def test_live_readiness_endpoint(client, env):
 
 def test_scan_endpoint_validates_profile(client, env):
     r = client.post("/api/scan", json={"profile": "không-tồn-tại"})
+    assert r.status_code == 400
+
+
+def test_risk_profile_endpoint_roundtrip(client, env):
+    assert client.get("/api/status").json()["risk_profile"] == "can_bang"
+    r = client.post("/api/risk-profile", json={"profile": "an_toan"})
+    assert r.status_code == 200 and r.json()["risk_profile"] == "an_toan"
+    s = client.get("/api/status").json()
+    assert s["risk_profile"] == "an_toan"
+    assert s["risk"]["max_risk_per_trade_pct"] == 0.5  # gate thật sự đổi
+
+
+def test_risk_profile_endpoint_rejects_unknown(client, env):
+    r = client.post("/api/risk-profile", json={"profile": "all_in"})
     assert r.status_code == 400
 
 

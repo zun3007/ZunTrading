@@ -55,6 +55,10 @@ class ModeBody(BaseModel):
     confirm: str | None = None
 
 
+class RiskProfileBody(BaseModel):
+    profile: str
+
+
 class ScanBody(BaseModel):
     profile: str = "day"
 
@@ -106,6 +110,8 @@ def status():
             },
             "mt5_demo_configured": settings.mt5.present,
             "mt5_live_configured": settings.mt5_live.present,
+            "risk_profile": settings.risk_profile_name,
+            "risk_profiles": settings.risk_profile_names,
         }
     finally:
         journal.close()
@@ -200,6 +206,17 @@ def logs(lines: int = 120):
 def set_pause(body: PauseBody):
     runmode.set_paused(body.paused)
     return {"paused": runmode.is_paused()}
+
+
+@app.post("/api/risk-profile")
+def set_risk_profile(body: RiskProfileBody):
+    settings = get_settings()
+    try:
+        runmode.set_risk_profile(body.profile, settings)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    log.warning("RISK PROFILE → %s", body.profile)
+    return {"risk_profile": load_settings().risk_profile_name}
 
 
 @app.post("/api/mode")
