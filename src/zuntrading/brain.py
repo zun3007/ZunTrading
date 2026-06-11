@@ -81,15 +81,34 @@ def _run_claude(prompt: str, model: str, timeout: int) -> str | None:
     except subprocess.TimeoutExpired:
         log.warning("claude -p timeout sau %ss (model=%s)", timeout, model)
         return None
-    if proc.returncode != 0:
-        log.warning("claude -p exit %s: %s", proc.returncode, (proc.stderr or "")[:300])
-        return None
+    # Parse envelope TRƯỚC khi nhìn exit code: hook SessionEnd của user fail
+    # có thể đầu độc exit code dù LLM đã trả lời thành công.
     try:
         envelope = json.loads(proc.stdout)
-        return envelope.get("result")
-    except (json.JSONDecodeError, AttributeError) as e:
-        log.warning("không parse được envelope claude CLI: %s", e)
+    except (json.JSONDecodeError, TypeError):
+        log.warning(
+            "claude -p không trả envelope JSON (exit %s): %.300s",
+            proc.returncode, proc.stderr or proc.stdout,
+        )
         return None
+    if not isinstance(envelope, dict):
+        return None
+    if envelope.get("is_error"):
+        status = envelope.get("api_error_status")
+        if status == 401:
+            log.error(
+                "claude CLI CHƯA ĐĂNG NHẬP (API 401). Chạy `claude` trong terminal"
+                " rồi gõ /login một lần — bot sẽ tự dùng được từ cycle sau."
+            )
+        else:
+            log.warning("claude -p báo lỗi: %.300s", envelope.get("result"))
+        return None
+    if proc.returncode != 0:
+        log.warning(
+            "claude -p exit %s nhưng envelope hợp lệ (hook lỗi?) → vẫn dùng kết quả",
+            proc.returncode,
+        )
+    return envelope.get("result")
 
 
 def _run_api(prompt: str, model: str, timeout: int, api_key: str) -> str | None:
@@ -198,7 +217,9 @@ def triage(candidate: Candidate, settings: Settings) -> bool:
     text = _ask(prompt, settings.models.triage, settings)
     obj = _extract_json(text or "")
     if obj is None:
-        log.warning("triage không trả JSON → bỏ candidate %s", candidate.symbol)
+        log.warning(
+            "triage không trả JSON → bỏ candidate %s (text: %.200s)", candidate.symbol, text
+        )
         return False
     return bool(obj.get("worth_analysis", False))
 

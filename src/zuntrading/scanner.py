@@ -39,6 +39,9 @@ class CycleStats:
 
 
 def setup_logging(level: int = logging.INFO) -> None:
+    # console Windows mặc định cp1252 — ép utf-8 để log tiếng Việt không nổ
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     Path("logs").mkdir(exist_ok=True)
     handlers: list[logging.Handler] = [
         logging.StreamHandler(sys.stdout),

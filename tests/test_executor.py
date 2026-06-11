@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from zuntrading.brain import Signal
-from zuntrading.config import SymbolConfig, load_settings
+from zuntrading.config import load_settings
 from zuntrading.executor import MAGIC, ExecutorUnavailable, MT5Executor, PaperExecutor
 from zuntrading.journal import Journal
 from zuntrading.prefilter import Candidate

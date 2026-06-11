@@ -72,6 +72,8 @@ claude -p "<prompt>" --model haiku|sonnet --output-format json --max-turns 1
 
 ## Tasks
 
+> **STATUS 2026-06-11: TẤT CẢ TASK HOÀN THÀNH.** 138 unit tests pass, ruff clean, risk gate 100% branch coverage, live haiku smoke pass, dry-run thật 8 symbols pass (errors=0). Deviation so với plan: thuật toán calibration đổi từ bucket-ladder sang evidence-only (siết khi thua / nới 1 nấc khi biên thấp nhất thắng vượt margin) — bucket-ladder cho phép nới vào vùng không có dữ liệu, không chấp nhận được; xem docstring `calibration.py`.
+
 ### Task 1: Plan doc ✅ (file này)
 
 ### Task 2: Scaffold + config

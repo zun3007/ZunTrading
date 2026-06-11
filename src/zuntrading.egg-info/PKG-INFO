@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: zuntrading
+Version: 0.1.0
+Summary: ZunTrading - Exness MT5 demo auto-trader with Claude brain, hard risk gate, Telegram notify
+Requires-Python: >=3.12

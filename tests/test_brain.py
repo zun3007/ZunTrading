@@ -100,12 +100,13 @@ def settings(monkeypatch):
     return load_settings(REPO_CONFIG, env_path=None)
 
 
-def fake_cli(result_payload):
+def fake_cli(result_payload, returncode=0, is_error=False, api_error_status=None):
+    envelope = {"result": result_payload, "is_error": is_error}
+    if api_error_status:
+        envelope["api_error_status"] = api_error_status
+
     def run(cmd, **kw):
-        return SimpleNamespace(
-            returncode=0, stderr="",
-            stdout=json.dumps({"result": result_payload}),
-        )
+        return SimpleNamespace(returncode=returncode, stderr="", stdout=json.dumps(envelope))
     return run
 
 
@@ -143,9 +144,31 @@ def test_missing_cli_fails_closed(monkeypatch, settings):
     assert triage(CAND, settings) is False
 
 
-# --- live smoke (pytest -m live): gọi haiku thật ---
+def test_hook_poisoned_exit_code_still_uses_valid_envelope(monkeypatch, settings):
+    # hook SessionEnd fail → exit 1, nhưng envelope hợp lệ → vẫn dùng
+    monkeypatch.setattr(
+        brain.subprocess, "run",
+        fake_cli('{"worth_analysis": true, "note": "ok"}', returncode=1),
+    )
+    assert triage(CAND, settings) is True
+
+
+def test_api_401_fails_closed_with_clear_log(monkeypatch, settings, caplog):
+    monkeypatch.setattr(
+        brain.subprocess, "run",
+        fake_cli("Failed to authenticate", is_error=True, api_error_status=401),
+    )
+    assert triage(CAND, settings) is False
+    assert "CHƯA ĐĂNG NHẬP" in caplog.text
+
+
+# --- live smoke (pytest -m live): gọi haiku thật, FAIL nếu CLI chưa login ---
 
 @pytest.mark.live
-def test_triage_live_returns_bool():
+def test_triage_live_real_call():
     s = load_settings(REPO_CONFIG, env_path=None)
-    assert triage(CAND, s) in (True, False)
+    text = brain._ask(
+        brain.TRIAGE_PROMPT.format(candidate="{}"), s.models.triage, s
+    )
+    assert text is not None, "claude -p fail — kiểm tra `claude` CLI đã /login chưa"
+    assert brain._extract_json(text) is not None, f"không phải JSON: {text[:200]}"
