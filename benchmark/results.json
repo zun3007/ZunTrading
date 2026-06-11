@@ -1,0 +1,30 @@
+{
+  "run": "2026-06-11, claude CLI 2.1.152 qua claude.exe + CLAUDE_CODE_OAUTH_TOKEN, golden set 6 case (2 BAD/2 GOOD/2 AMBIG), DECISION_PROMPT thật",
+  "note": "Benchmark đo: format validity, verdict trên case có đáp án, latency end-to-end (gồm CLI startup). KHÔNG đo profitability — cái đó cần demo 2-4 tuần.",
+  "rows": [
+    {"model": "haiku", "case": "BAD-counter-trend", "verdict": "skip", "expect": "skip", "match": true, "latency_s": 48.9},
+    {"model": "haiku", "case": "BAD-mid-range-chop", "verdict": "skip", "expect": "skip", "match": true, "latency_s": 48.5},
+    {"model": "haiku", "case": "GOOD-clean-pullback", "verdict": "skip", "expect": "trade", "match": false, "latency_s": 55.9},
+    {"model": "haiku", "case": "GOOD-breakout-momentum", "verdict": "skip", "expect": "trade", "match": false, "latency_s": 46.5},
+    {"model": "haiku", "case": "AMBIG-weak-trend", "verdict": "skip", "expect": null, "match": null, "latency_s": 48.1},
+    {"model": "haiku", "case": "AMBIG-oversold-edge", "verdict": "skip", "expect": null, "match": null, "latency_s": 46.3},
+    {"model": "sonnet", "case": "BAD-counter-trend", "verdict": "skip", "expect": "skip", "match": true, "latency_s": 42.1},
+    {"model": "sonnet", "case": "BAD-mid-range-chop", "verdict": "skip", "expect": "skip", "match": true, "latency_s": 51.0},
+    {"model": "sonnet", "case": "GOOD-clean-pullback", "verdict": "skip", "expect": "trade", "match": false, "latency_s": 60.8},
+    {"model": "sonnet", "case": "GOOD-breakout-momentum", "verdict": "trade", "expect": "trade", "match": true, "latency_s": 61.2},
+    {"model": "sonnet", "case": "AMBIG-weak-trend", "verdict": "skip", "expect": null, "match": null, "latency_s": 49.0},
+    {"model": "sonnet", "case": "AMBIG-oversold-edge", "verdict": "trade", "expect": null, "match": null, "latency_s": 74.3},
+    {"model": "opus", "case": "BAD-counter-trend", "verdict": "skip", "expect": "skip", "match": true, "latency_s": 30.7},
+    {"model": "opus", "case": "BAD-mid-range-chop", "verdict": "skip", "expect": "skip", "match": true, "latency_s": 30.9},
+    {"model": "opus", "case": "GOOD-clean-pullback", "verdict": "skip", "expect": "trade", "match": false, "latency_s": 33.4},
+    {"model": "opus", "case": "GOOD-breakout-momentum", "verdict": "trade", "expect": "trade", "match": true, "latency_s": 26.1},
+    {"model": "opus", "case": "AMBIG-weak-trend", "verdict": "skip", "expect": null, "match": null, "latency_s": 30.8},
+    {"model": "opus", "case": "AMBIG-oversold-edge", "verdict": "trade", "expect": null, "match": null, "latency_s": 30.8}
+  ],
+  "summary": {
+    "haiku":  {"json_valid": "6/6", "correct_on_graded": "2/4", "avg_latency_s": 49.0, "ghi_chú": "skip TẤT CẢ — an toàn tuyệt đối nhưng không bao giờ trade = vô dụng làm decision"},
+    "sonnet": {"json_valid": "6/6", "correct_on_graded": "3/4", "avg_latency_s": 56.4, "ghi_chú": "chặn đủ case xấu, bắt được breakout"},
+    "opus":   {"json_valid": "6/6", "correct_on_graded": "3/4", "avg_latency_s": 30.5, "ghi_chú": "chất lượng ngang sonnet trên set này, NHANH GẦN GẤP ĐÔI"}
+  },
+  "verdict": "Config hiện tại (triage=sonnet, decision=opus) được data xác nhận. Haiku không phù hợp làm decision."
+}

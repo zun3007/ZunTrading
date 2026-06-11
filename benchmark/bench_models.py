@@ -16,6 +16,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # console Windows cp1252
+
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 load_dotenv(REPO / ".env")
