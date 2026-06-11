@@ -1,15 +1,17 @@
 # ZunTrading — Design Spec
 
-- **Date:** 2026-06-11
-- **Status:** Approved hướng đi (signal bot + Bybit demo). Chờ user review spec.
+- **Date:** 2026-06-11 (rev 2 — pivot executor sang Exness MT5, user approved)
+- **Status:** Approved. Đang implement.
 - **Owner:** Zun
 
 ## 1. Mục tiêu
 
 Bot phân tích thị trường chạy 24/7 trên máy Windows của user, một bộ não — hai đầu ra:
 
-1. **Mitrade Signal Bot** — bắn signal qua Telegram (Long/Short, entry, SL, TP, size theo % vốn, lý do 1 dòng). User tự bấm lệnh trên Mitrade.
-2. **Bybit Demo Auto-Trader** — cùng bộ não, tự đặt lệnh qua Bybit Demo Trading API (vốn ảo, endpoint `api-demo.bybit.com`). Vai trò: bằng chứng sống cho hiệu quả full-auto, zero rủi ro tiền thật.
+1. **Exness MT5 Demo Auto-Trader** — bot tự đặt lệnh full-auto qua MetaTrader 5 (Python package `MetaTrader5`) trên **tài khoản demo Exness** (vốn ảo). Automation là tính năng chính thức của MT5 — không vi phạm ToS. Trade đúng markets user muốn: XAUUSD, forex majors, BTCUSD/ETHUSD, indices.
+2. **Telegram notify/signal** — mọi lệnh bot vào/ra + signal đầy đủ (Long/Short, entry, SL, TP, size, lý do) bắn về điện thoại user. User muốn mirror tay trên Mitrade thì dùng như signal; không thì dùng để giám sát bot.
+
+Bybit Demo (REST API) hạ xuống **optional Phase 3** — chỉ khi user muốn thêm nhánh crypto 24/7 native.
 
 ### Non-goals (đã chốt, không mở lại)
 
@@ -19,12 +21,14 @@ Bot phân tích thị trường chạy 24/7 trên máy Windows của user, một
 
 ## 2. Markets & nhịp quét
 
-| Market | Symbol data | Nguồn data (free) | Bybit demo tradeable? |
+| Market | Symbol MT5 (Exness) | Nguồn data phân tích (free) | Bot trade demo? |
 |---|---|---|---|
-| Vàng | XAU/USD | yfinance (`GC=F`) | PAXGUSDT (verify khi build; nếu không có → signal-only) |
-| Forex | EUR/USD, GBP/USD, USD/JPY | yfinance (`EURUSD=X`…) | Không → signal-only |
-| Crypto | BTC/USDT, ETH/USDT | Binance public API | BTCUSDT, ETHUSDT perp ✓ |
-| Indices | NAS100, US30 | yfinance (`^NDX`, `^DJI`) | Không → signal-only |
+| Vàng | XAUUSD | MT5 candles (chính) / yfinance `GC=F` (fallback) | ✓ |
+| Forex | EURUSD, GBPUSD, USDJPY | MT5 candles / yfinance fallback | ✓ |
+| Crypto | BTCUSD, ETHUSD | MT5 candles / Binance public fallback | ✓ |
+| Indices | USTEC (NAS100), US30 | MT5 candles / yfinance fallback | ✓ |
+
+Tên symbol Exness xác minh runtime bằng `mt5.symbols_get()` — config có bảng map, bot tự resolve + báo lỗi rõ nếu symbol không tồn tại. Khi MT5 chưa kết nối (chưa cài/chưa login), data layer tự fallback nguồn free để **dry-run vẫn chạy được 100%**.
 
 - 2 profile song song: **Day** (M15–H1, quét mỗi 15 phút) và **Swing** (H4–D1, quét mỗi 4 giờ). Signal ghi rõ profile.
 - Forex/vàng/indices chỉ quét giờ thị trường mở; crypto 24/7.
@@ -46,9 +50,12 @@ Bot phân tích thị trường chạy 24/7 trên máy Windows của user, một
        │    • lỗ ngày (demo) ≥ 3% → bot ngừng signal tới 0h hôm sau
        │    • confidence < ngưỡng config → bỏ
        ├─ outputs:
-       │    • Telegram: signal format chuẩn, đủ thông tin bấm lệnh Mitrade trong 15s
-       │    • Bybit Demo API v5: đặt lệnh + SL/TP (chỉ BTC/ETH/PAXG)
+       │    • Executor interface: PaperExecutor (dry-run, mặc định) │ MT5Executor (Exness demo)
+       │      MT5Executor: order_send với SL/TP đính kèm SERVER-SIDE → bot crash thì SL vẫn sống
+       │    • Telegram: mọi lệnh + signal format chuẩn (mirror tay Mitrade được nếu muốn)
        └─ journal: SQLite — mọi signal, mọi lệnh demo, outcome tracking
+       └─ calibration: đối chiếu confidence Claude nói vs kết quả thật theo bucket,
+          tự nâng/hạ ngưỡng confidence per-market theo evidence (không tin lời LLM suông)
   └─ reporter (daily 21:00 VN)
        └─ Telegram: win rate, P&L demo, max drawdown, signal nào ăn/thua, uptime
 ```
@@ -80,12 +87,12 @@ Bot phân tích thị trường chạy 24/7 trên máy Windows của user, một
 
 ## 7. Phases
 
-1. **Phase 1 (build ngay):** repo scaffold, data fetch, indicators, pre-filter, Claude brain, risk gate, Telegram signal, journal, dry-run + unit tests.
-2. **Phase 2:** Bybit Demo executor + daily reporter + Task Scheduler setup.
-3. **Phase 3 (ngoài scope build):** user tự quyết demo→real dựa trên số liệu; bot chỉ cần đổi endpoint+key nếu user quyết.
+1. **Phase 1 (build ngay):** repo scaffold, data fetch (free sources), indicators, pre-filter, Claude brain, risk gate, journal, PaperExecutor, Telegram notify, scanner, reporter, unit tests, dry-run chạy được ngay không cần MT5.
+2. **Phase 2 (build ngay luôn, kích hoạt khi user cài xong):** MT5Executor (Exness demo) + script cài Windows Task Scheduler + hướng dẫn user từng bước (README tiếng Việt).
+3. **Phase 3 (optional, sau):** Bybit Demo nhánh crypto 24/7; user tự quyết demo→real (đổi account login, ngoài scope).
 
-## 8. User cần chuẩn bị
+## 8. User cần chuẩn bị (chi tiết trong README)
 
-1. Telegram: tạo bot qua @BotFather (2 phút) → đưa token + chat_id vào `.env`.
-2. Bybit: tạo account (free) → bật Demo Trading → tạo Demo API key (cần ở Phase 2).
-3. Máy treo 24/7 (đã có), Claude Code đã đăng nhập (đã có).
+1. Telegram: tạo bot qua @BotFather (2 phút) → token + chat_id vào `.env`.
+2. Exness: tạo account miễn phí → tạo **tài khoản DEMO MT5** → cài MT5 terminal trên máy → login demo.
+3. Máy treo 24/7 (đã có), Claude Code đã đăng nhập (đã có), Python 3.12+ (README có lệnh cài).
