@@ -1,0 +1,111 @@
+# ZunTrading configuration
+# Secrets KHÔNG để ở đây — dùng .env (xem .env.example)
+
+account:
+  # Equity tham chiếu cho PaperExecutor (USD ảo). MT5Executor đọc equity thật từ terminal.
+  reference_equity: 10000
+
+risk:
+  max_risk_per_trade_pct: 1.0        # rule 1: risk mỗi lệnh ≤ 1% equity
+  max_total_open_risk_pct: 3.0       # rule 2: tổng risk vị thế mở ≤ 3% equity
+  min_rr: 1.5                        # rule 3: reward/risk tối thiểu
+  max_trades_per_day_per_market: 3   # rule 4a
+  max_open_positions_per_symbol: 1   # rule 4b
+  daily_loss_stop_pct: 3.0           # rule 5: circuit breaker theo ngày (giờ VN)
+  default_confidence: 0.65           # rule 6: ngưỡng khi chưa đủ dữ liệu calibration
+  target_winrate: 0.50               # calibration: bucket đạt win-rate này mới hạ ngưỡng
+
+models:
+  triage: haiku        # quét rẻ, tần suất cao
+  decision: sonnet     # chấm setup đạt ngưỡng
+  timeout_seconds: 60
+
+profiles:
+  day:
+    timeframes: { context: H1, entry: M15 }
+    scan_interval_minutes: 15
+  swing:
+    timeframes: { context: D1, entry: H4 }
+    scan_interval_minutes: 240
+
+# value_per_point: USD xấp xỉ cho 1.0 đơn vị giá × 1 lot — dùng cho Paper sizing.
+# MT5Executor LUÔN dùng tick_value/tick_size thật từ terminal khi tính lots.
+markets:
+  gold:
+    enabled: true
+    session: forex
+    symbols:
+      - mt5: XAUUSD
+        yfinance: "GC=F"
+        binance: null
+        value_per_point: 100
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 5.0
+  forex:
+    enabled: true
+    session: forex
+    symbols:
+      - mt5: EURUSD
+        yfinance: "EURUSD=X"
+        binance: null
+        value_per_point: 100000
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 5.0
+      - mt5: GBPUSD
+        yfinance: "GBPUSD=X"
+        binance: null
+        value_per_point: 100000
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 5.0
+      - mt5: USDJPY
+        yfinance: "USDJPY=X"
+        binance: null
+        value_per_point: 650   # xấp xỉ USD; MT5 runtime dùng tick_value thật
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 5.0
+  crypto:
+    enabled: true
+    session: crypto
+    symbols:
+      - mt5: BTCUSD
+        yfinance: null
+        binance: BTCUSDT
+        value_per_point: 1
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 10.0
+      - mt5: ETHUSD
+        yfinance: null
+        binance: ETHUSDT
+        value_per_point: 1
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 50.0
+  indices:
+    enabled: true
+    session: indices
+    symbols:
+      - mt5: USTEC
+        yfinance: "^NDX"
+        binance: null
+        value_per_point: 1
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 10.0
+      - mt5: US30
+        yfinance: "^DJI"
+        binance: null
+        value_per_point: 1
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 10.0
+
+journal:
+  db_path: data/zuntrading.db
+
+report:
+  daily_at_local: "21:00"   # giờ VN
