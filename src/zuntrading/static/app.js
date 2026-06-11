@@ -76,7 +76,15 @@ function renderStatus(s) {
   badge.className = "badge " + (s.paused ? "badge-paused" : s.mode === "live" ? "badge-live" : "badge-demo");
   badge.textContent = s.paused ? "PAUSED" : s.mode.toUpperCase();
 
-  setEquity($("#equity"), s.paper_equity);
+  // Ưu tiên equity THẬT từ MT5 terminal; paper chỉ là fallback mô phỏng
+  if (s.mt5_equity !== null && s.mt5_equity !== undefined) {
+    $("#equityLabel").textContent = `Equity (MT5 ${s.mode})`;
+    setEquity($("#equity"), s.mt5_equity);
+  } else {
+    $("#equityLabel").textContent = s.mt5_demo_configured
+      ? "Equity (paper — mở MT5 terminal để thấy số thật)" : "Equity (paper)";
+    setEquity($("#equity"), s.paper_equity);
+  }
   const pnl = s.today.realized_pnl;
   const pnlEl = $("#todayPnl");
   pnlEl.textContent = fmtUsd(pnl);

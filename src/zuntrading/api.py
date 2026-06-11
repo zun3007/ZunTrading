@@ -37,6 +37,22 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 _scan_lock = threading.Lock()
 _scan_state = {"running": False, "last_result": None}
+_mt5_cache: dict = {"executor": None, "mode": None}
+
+
+def _mt5_equity(settings: Settings) -> float | None:
+    """Equity THẬT từ MT5 terminal (cached connection). None nếu MT5 chưa sẵn sàng."""
+    from .executor import ExecutorUnavailable, MT5Executor
+
+    current_mode = runmode.get_mode()
+    if _mt5_cache["executor"] is None or _mt5_cache["mode"] != current_mode:
+        _mt5_cache["executor"] = MT5Executor(settings, current_mode)
+        _mt5_cache["mode"] = current_mode
+    try:
+        return round(_mt5_cache["executor"].equity(), 2)
+    except (ExecutorUnavailable, Exception):  # noqa: BLE001 — terminal tắt/chưa login
+        _mt5_cache["executor"] = None  # reset để lần sau thử connect lại
+        return None
 
 
 def get_settings() -> Settings:
@@ -127,6 +143,7 @@ def status():
             "paused": state.paused,
             "scan_running": _scan_state["running"],
             "paper_equity": paper.equity(),
+            "mt5_equity": _mt5_equity(settings) if settings.mt5.present or settings.mt5_live.present else None,
             "reference_equity": settings.reference_equity,
             "today": {
                 "trades_by_market": today.trades_by_market,

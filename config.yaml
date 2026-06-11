@@ -2,8 +2,9 @@
 # Secrets KHÔNG để ở đây — dùng .env (xem .env.example)
 
 account:
-  # Equity tham chiếu cho PaperExecutor (USD ảo). MT5Executor đọc equity thật từ terminal.
-  reference_equity: 10000
+  # Equity tham chiếu cho PaperExecutor (USD ảo) — đặt BẰNG vốn demo/real thật
+  # để mô phỏng paper nhất quán. MT5Executor luôn đọc equity thật từ terminal.
+  reference_equity: 500
 
 # 3 risk profile — chuyển trên dashboard (state lưu ở data/risk_profile.json).
 # Mạo hiểm nghĩa là LỖ NHANH HƠN KHI SAI, không phải "lời nhiều hơn". Vẫn có trần cứng.

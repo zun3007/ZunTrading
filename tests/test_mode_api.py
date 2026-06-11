@@ -116,9 +116,19 @@ def test_status_endpoint_shape(client, env):
     s = client.get("/api/status").json()
     assert s["mode"] == "demo" and s["paused"] is False
     assert s["paper_equity"] == env["settings"].reference_equity
+    assert s["mt5_equity"] is None  # không có MT5 creds trong env test
     assert len(s["open_positions"]) == 1
     assert s["open_positions"][0]["symbol"] == "XAUUSD"
     assert s["risk"]["min_rr"] == 1.5
+
+
+def test_status_shows_real_mt5_equity_when_connected(client, env, monkeypatch):
+    monkeypatch.setenv("MT5_LOGIN", "123")
+    monkeypatch.setenv("MT5_PASSWORD", "x")
+    monkeypatch.setenv("MT5_SERVER", "Exness-MT5Trial")
+    monkeypatch.setattr(api, "_mt5_equity", lambda s: 500.0)
+    s = client.get("/api/status").json()
+    assert s["mt5_equity"] == 500.0  # tiền demo THẬT hiển thị, không phải paper
 
 
 def test_equity_curve_endpoint(client, env):
