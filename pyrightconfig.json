@@ -1,0 +1,6 @@
+{
+  "extraPaths": ["src"],
+  "reportMissingImports": "warning",
+  "reportAttributeAccessIssue": "none",
+  "reportCallIssue": "warning"
+}
