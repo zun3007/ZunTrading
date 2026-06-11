@@ -60,7 +60,46 @@ Nếu action="skip": vẫn điền đủ field (entry/sl/tp có thể là 0), co
 
 
 def _claude_bin() -> str | None:
-    return shutil.which("claude")
+    """Tìm claude CLI, ƯU TIÊN native .exe.
+
+    Trên Windows, npm shim `claude.cmd` là batch file — batch nuốt newline trong
+    argument → prompt nhiều dòng bị cắt còn dòng đầu, flags phía sau bay màu.
+    Native claude.exe (CreateProcess) truyền args nguyên vẹn.
+    """
+    exe = shutil.which("claude.exe")
+    if exe:
+        return exe
+    p = shutil.which("claude")
+    if p and p.lower().endswith((".cmd", ".bat")):
+        log.warning("chỉ tìm thấy %s (batch shim) — prompt nhiều dòng có thể bị cắt", p)
+    return p
+
+
+def _parse_envelope(stdout: str | None) -> dict | None:
+    """Envelope CLI là 1 dòng JSON, nhưng hook của user có thể in rác lẫn vào stdout.
+
+    Thử parse cả cục trước; fail thì quét từng dòng từ DƯỚI lên, lấy dòng JSON
+    đầu tiên có key 'result' (envelope luôn in cuối).
+    """
+    if not stdout:
+        return None
+    try:
+        obj = json.loads(stdout)
+        if isinstance(obj, dict):
+            return obj
+    except json.JSONDecodeError:
+        pass
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and "result" in obj:
+            return obj
+    return None
 
 
 def _run_claude(prompt: str, model: str, timeout: int) -> str | None:
@@ -83,15 +122,12 @@ def _run_claude(prompt: str, model: str, timeout: int) -> str | None:
         return None
     # Parse envelope TRƯỚC khi nhìn exit code: hook SessionEnd của user fail
     # có thể đầu độc exit code dù LLM đã trả lời thành công.
-    try:
-        envelope = json.loads(proc.stdout)
-    except (json.JSONDecodeError, TypeError):
+    envelope = _parse_envelope(proc.stdout)
+    if envelope is None:
         log.warning(
             "claude -p không trả envelope JSON (exit %s): %.300s",
             proc.returncode, proc.stderr or proc.stdout,
         )
-        return None
-    if not isinstance(envelope, dict):
         return None
     if envelope.get("is_error"):
         status = envelope.get("api_error_status")

@@ -144,6 +144,13 @@ def test_missing_cli_fails_closed(monkeypatch, settings):
     assert triage(CAND, settings) is False
 
 
+def test_claude_bin_prefers_native_exe(monkeypatch):
+    paths = {"claude.exe": r"C:\Users\x\.local\bin\claude.exe",
+             "claude": r"C:\Users\x\AppData\Roaming\npm\claude.CMD"}
+    monkeypatch.setattr(brain.shutil, "which", lambda n: paths.get(n))
+    assert brain._claude_bin().endswith("claude.exe")  # né batch shim nuốt newline
+
+
 def test_hook_poisoned_exit_code_still_uses_valid_envelope(monkeypatch, settings):
     # hook SessionEnd fail → exit 1, nhưng envelope hợp lệ → vẫn dùng
     monkeypatch.setattr(
@@ -162,13 +169,27 @@ def test_api_401_fails_closed_with_clear_log(monkeypatch, settings, caplog):
     assert "CHƯA ĐĂNG NHẬP" in caplog.text
 
 
-# --- live smoke (pytest -m live): gọi haiku thật, FAIL nếu CLI chưa login ---
+def test_parse_envelope_survives_hook_noise():
+    from zuntrading.brain import _parse_envelope
+
+    noisy = 'hook nói gì đó\nrác nữa\n{"type":"result","result":"ok","is_error":false}'
+    assert _parse_envelope(noisy) == {"type": "result", "result": "ok", "is_error": False}
+    assert _parse_envelope("toàn rác\nkhông json") is None
+    assert _parse_envelope(None) is None
+
+
+# --- live smoke (pytest -m live): gọi model thật với candidate THẬT, FAIL nếu auth chết ---
 
 @pytest.mark.live
 def test_triage_live_real_call():
+    import json as _json
+    from dataclasses import asdict
+
     s = load_settings(REPO_CONFIG, env_path=None, risk_profile="can_bang")
-    text = brain._ask(
-        brain.TRIAGE_PROMPT.format(candidate="{}"), s.models.triage, s
+    prompt = brain.TRIAGE_PROMPT.format(
+        candidate=_json.dumps(asdict(CAND), ensure_ascii=False)
     )
-    assert text is not None, "claude -p fail — kiểm tra `claude` CLI đã /login chưa"
-    assert brain._extract_json(text) is not None, f"không phải JSON: {text[:200]}"
+    text = brain._ask(prompt, s.models.triage, s)
+    assert text is not None, "claude -p fail — token/auth chết (xem README mục 401)"
+    obj = brain._extract_json(text)
+    assert obj is not None and "worth_analysis" in obj, f"không phải JSON triage: {text[:200]}"
