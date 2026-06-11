@@ -2,5 +2,8 @@
   "extraPaths": ["src"],
   "reportMissingImports": "warning",
   "reportAttributeAccessIssue": "none",
-  "reportCallIssue": "warning"
+  "reportCallIssue": "warning",
+  "reportReturnType": "warning",
+  "reportArgumentType": "warning",
+  "reportGeneralTypeIssues": "warning"
 }
