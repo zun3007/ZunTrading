@@ -13,7 +13,7 @@ from zuntrading.journal import Journal
 from zuntrading.prefilter import Candidate
 from zuntrading.risk import Verdict
 
-SETTINGS = load_settings(Path(__file__).resolve().parents[1] / "config.yaml", env_path=None)
+SETTINGS = load_settings(Path(__file__).resolve().parents[1] / "config.yaml", env_path=None, risk_profile="can_bang")
 
 XAU = next(s for s in SETTINGS.symbols if s.mt5 == "XAUUSD")
 SIG = Signal(action="trade", direction="long", entry=2000.0, sl=1996.0, tp=2008.0,
@@ -123,6 +123,8 @@ class FakeMT5:
         self.sent = []
         self.retcode = self.TRADE_RETCODE_DONE
         self.login = 12345  # khớp MT5_LOGIN trong fixture
+        self.margin_free = 10_000.0
+        self.margin_needed = 50.0
 
     def initialize(self, **kw):
         return True
@@ -134,7 +136,10 @@ class FakeMT5:
         return (0, "ok")
 
     def account_info(self):
-        return SimpleNamespace(equity=10_000.0, login=self.login)
+        return SimpleNamespace(equity=10_000.0, login=self.login, margin_free=self.margin_free)
+
+    def order_calc_margin(self, order_type, symbol, lots, price):
+        return self.margin_needed
 
     def symbol_info(self, name):
         return SimpleNamespace(trade_tick_value=1.0, trade_tick_size=0.01, filling_mode=2)
@@ -170,7 +175,7 @@ def fake_mt5(monkeypatch):
 
 
 def mt5_settings(tmp_path):
-    return load_settings(Path(__file__).resolve().parents[1] / "config.yaml", env_path=None)
+    return load_settings(Path(__file__).resolve().parents[1] / "config.yaml", env_path=None, risk_profile="can_bang")
 
 
 def test_mt5_place_builds_correct_request(fake_mt5, tmp_path):
@@ -241,3 +246,16 @@ def test_mt5_live_mode_requires_live_creds(fake_mt5, tmp_path, monkeypatch):
     ex = MT5Executor(mt5_settings(tmp_path), mode="live")
     with pytest.raises(ExecutorUnavailable, match="MT5_LIVE"):
         ex.equity()
+
+
+def test_mt5_margin_guard_blocks_oversized_order(fake_mt5, tmp_path):
+    fake_mt5.margin_needed = 9_000.0  # > 80% của 10k free margin
+    ex = MT5Executor(mt5_settings(tmp_path))
+    res = ex.place(SIG, XAU, 5.0)
+    assert not res.ok and "margin" in res.message
+    assert fake_mt5.sent == []  # không gửi order
+
+
+def test_mt5_margin_guard_passes_normal_order(fake_mt5, tmp_path):
+    ex = MT5Executor(mt5_settings(tmp_path))
+    assert ex.place(SIG, XAU, 0.25).ok

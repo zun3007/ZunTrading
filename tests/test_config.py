@@ -110,8 +110,9 @@ def test_risk_profiles_resolution_order(tmp_path, monkeypatch):
     (tmp_path / "rp.json").write_text('{"profile": "mao_hiem"}', encoding="utf-8")
     s = load_settings(REAL_CONFIG, env_path=None)
     assert s.risk_profile_name == "mao_hiem"
-    assert s.risk.max_risk_per_trade_pct == 2.0
-    assert s.risk.daily_loss_stop_pct == 5.0
+    assert s.risk.max_risk_per_trade_pct == 3.0
+    assert s.risk.daily_loss_stop_pct == 8.0
+    assert s.risk.confidence_sizing is True
     # state file rác → fallback yaml active (can_bang)
     (tmp_path / "rp.json").write_text("{hỏng", encoding="utf-8")
     assert load_settings(REAL_CONFIG, env_path=None).risk_profile_name == "can_bang"

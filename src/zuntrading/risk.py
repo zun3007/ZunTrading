@@ -44,11 +44,29 @@ class Verdict:
     reject_reasons: list[str]
 
 
+CONF_MULT_MIN = 0.7
+CONF_MULT_MAX = 1.5
+
+
+def confidence_multiplier(confidence: float, threshold: float) -> float:
+    """Map tuyến tính conf [threshold → 1.0] thành hệ số size [0.7 → 1.5].
+
+    LLM KHÔNG đặt số risk — nó chỉ kéo hệ số trong dải code cho phép, và confidence
+    của nó đã bị calibration giám sát (nói phét là ngưỡng tự siết).
+    """
+    span = 1.0 - threshold
+    if span <= 0:
+        return 1.0
+    t = (confidence - threshold) / span
+    return max(CONF_MULT_MIN, min(CONF_MULT_MAX, CONF_MULT_MIN + (CONF_MULT_MAX - CONF_MULT_MIN) * t))
+
+
 def position_size(
     sig: Signal, sym: SymbolConfig, equity: float, settings: Settings,
     value_per_point: float | None = None,
+    confidence_threshold: float | None = None,
 ) -> tuple[float, float]:
-    """(lots, risk_USD) sao cho risk ≤ R1. lots=0 nghĩa là không size được trong budget.
+    """(lots, risk_USD) sao cho risk ≤ R1 (× hệ số confidence nếu profile bật).
 
     value_per_point: MT5Executor truyền tick value THẬT từ terminal; mặc định dùng config.
     """
@@ -57,6 +75,8 @@ def position_size(
     if dist <= 0 or vpp <= 0 or equity <= 0:
         return 0.0, 0.0
     budget = equity * settings.risk.max_risk_per_trade_pct / 100.0
+    if settings.risk.confidence_sizing and confidence_threshold is not None:
+        budget *= confidence_multiplier(sig.confidence, confidence_threshold)
     raw = budget / (dist * vpp)
     lots = math.floor(raw / sym.lot_step + 1e-9) * sym.lot_step
     lots = round(min(lots, sym.max_lot), 6)
@@ -115,8 +135,10 @@ def evaluate(
     if same_symbol >= settings.risk.max_open_positions_per_symbol:
         reasons.append(f"R4b: đã có {same_symbol} vị thế mở trên {sym.mt5}")
 
-    # R1 — sizing trong budget
-    lots, risk_amount = position_size(sig, sym, equity, settings, value_per_point)
+    # R1 — sizing trong budget (× confidence nếu profile bật)
+    lots, risk_amount = position_size(
+        sig, sym, equity, settings, value_per_point, confidence_threshold
+    )
     if lots <= 0:
         reasons.append("R1: không size được lot trong budget risk (SL quá xa hoặc equity quá nhỏ)")
 

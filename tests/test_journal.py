@@ -12,7 +12,7 @@ from zuntrading.journal import Journal, _vn_day, today_vn
 from zuntrading.prefilter import Candidate
 from zuntrading.risk import Verdict
 
-SETTINGS = load_settings(Path(__file__).resolve().parents[1] / "config.yaml", env_path=None)
+SETTINGS = load_settings(Path(__file__).resolve().parents[1] / "config.yaml", env_path=None, risk_profile="can_bang")
 
 CAND = Candidate(
     symbol="XAUUSD", market="gold", profile="day", setup_type="pullback_trend",

@@ -120,6 +120,37 @@ SL/TP gắn **trên server Exness** ngay lúc đặt lệnh — bot crash, mất
 
 **Token Claude tốn không?** Pre-filter chặn trước nên đa số cycle không gọi LLM nào; khi có setup mới gọi haiku (~rẻ), đạt ngưỡng mới gọi sonnet. Dùng login Claude Code subscription sẵn có.
 
+## Fix lỗi 401 (não bot không trả lời)
+
+Token CLI hết hạn (file credentials cũ). Chạy 1 trong 2, **một lần duy nhất**:
+
+```powershell
+claude auth login     # đăng nhập lại (mở browser)
+# HOẶC — khuyến nghị cho bot chạy 24/7:
+claude setup-token    # tạo token dài hạn cho headless (cần Claude subscription)
+```
+
+Kiểm tra: `claude -p "hi" --output-format json` → thấy `"is_error":false` là não sống. Rồi chạy `python -m pytest -m live -q` → `2 passed`.
+
+## Đem lên GitHub / cài máy khác
+
+Repo đã portable: không hardcode path, secrets nằm trong `.env` (gitignored), chart lib vendored, line-endings chuẩn hóa qua `.gitattributes`.
+
+```powershell
+# Đẩy lên GitHub (1 lần, cần gh CLI hoặc tự tạo repo trên web):
+gh repo create ZunTrading --private --source . --push
+
+# Trên máy mới (Windows — MT5Executor cần Windows; package MetaTrader5 không có trên Mac/Linux):
+git clone <repo-url> ZunTrading; cd ZunTrading
+pip install -r requirements.txt; pip install -r requirements-mt5.txt; pip install -e .
+Copy-Item .env.example .env   # điền lại secrets — KHÔNG copy .env qua mạng
+claude auth login              # hoặc setup-token
+.\scripts\dry_run.ps1          # smoke test
+.\scripts\install_task.ps1     # bật 24/7
+```
+
+Lưu ý: dashboard + paper mode chạy được mọi OS; riêng **đặt lệnh MT5 cần Windows** (giới hạn của package MetaTrader5).
+
 ## Cấu trúc repo
 
 ```

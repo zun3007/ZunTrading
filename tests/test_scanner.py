@@ -14,7 +14,7 @@ from zuntrading.executor import PaperExecutor
 from zuntrading.journal import Journal
 from zuntrading.prefilter import Candidate
 
-FULL = load_settings(Path(__file__).resolve().parents[1] / "config.yaml", env_path=None)
+FULL = load_settings(Path(__file__).resolve().parents[1] / "config.yaml", env_path=None, risk_profile="can_bang")
 XAU = next(s for s in FULL.symbols if s.mt5 == "XAUUSD")
 SETTINGS = dataclasses.replace(FULL, symbols=[XAU])  # 1 symbol cho test
 

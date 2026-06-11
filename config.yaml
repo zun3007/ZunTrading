@@ -28,19 +28,20 @@ risk_profiles:
     default_confidence: 0.65           # rule 6: ngưỡng khi chưa đủ calibration
     target_winrate: 0.50
   mao_hiem:
-    max_risk_per_trade_pct: 2.0
-    max_total_open_risk_pct: 6.0
+    max_risk_per_trade_pct: 3.0       # base; bật confidence_sizing → 0.7x–1.5x theo conf (đỉnh 4.5%)
+    max_total_open_risk_pct: 9.0
     min_rr: 1.3
     max_trades_per_day_per_market: 5
     max_open_positions_per_symbol: 1
-    daily_loss_stop_pct: 5.0
+    daily_loss_stop_pct: 8.0
     default_confidence: 0.60
     target_winrate: 0.50
+    confidence_sizing: true           # lệnh conf cao ăn size to hơn — trong trần, không phải LLM tự đặt
 
 models:
-  triage: haiku        # quét rẻ, tần suất cao
-  decision: sonnet     # chấm setup đạt ngưỡng
-  timeout_seconds: 60
+  triage: sonnet       # lọc setup (nâng từ haiku theo yêu cầu — pre-filter code đã chặn đa số trước đó)
+  decision: opus       # quyết định cuối — model mạnh nhất ở đúng chỗ ăn tiền
+  timeout_seconds: 90  # opus suy nghĩ lâu hơn
 
 profiles:
   day:

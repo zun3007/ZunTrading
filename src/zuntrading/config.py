@@ -25,6 +25,7 @@ class RiskConfig:
     daily_loss_stop_pct: float
     default_confidence: float
     target_winrate: float
+    confidence_sizing: bool = False  # bật: size 0.7x–1.5x theo confidence (trong trần)
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,7 @@ def load_settings(
         daily_loss_stop_pct=float(risk_raw["daily_loss_stop_pct"]),
         default_confidence=float(risk_raw["default_confidence"]),
         target_winrate=float(risk_raw["target_winrate"]),
+        confidence_sizing=bool(risk_raw.get("confidence_sizing", False)),
     )
     _require(_pct_ok(risk.max_risk_per_trade_pct), "max_risk_per_trade_pct phải trong (0, 10]")
     _require(_pct_ok(risk.max_total_open_risk_pct), "max_total_open_risk_pct phải trong (0, 10]")

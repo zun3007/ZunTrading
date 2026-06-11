@@ -97,7 +97,7 @@ REPO_CONFIG = Path(__file__).resolve().parents[1] / "config.yaml"
 @pytest.fixture
 def settings(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    return load_settings(REPO_CONFIG, env_path=None)
+    return load_settings(REPO_CONFIG, env_path=None, risk_profile="can_bang")
 
 
 def fake_cli(result_payload, returncode=0, is_error=False, api_error_status=None):
@@ -166,7 +166,7 @@ def test_api_401_fails_closed_with_clear_log(monkeypatch, settings, caplog):
 
 @pytest.mark.live
 def test_triage_live_real_call():
-    s = load_settings(REPO_CONFIG, env_path=None)
+    s = load_settings(REPO_CONFIG, env_path=None, risk_profile="can_bang")
     text = brain._ask(
         brain.TRIAGE_PROMPT.format(candidate="{}"), s.models.triage, s
     )

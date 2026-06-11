@@ -6,9 +6,18 @@ import pytest
 
 from zuntrading.brain import Signal
 from zuntrading.config import SymbolConfig, load_settings
-from zuntrading.risk import OpenPosition, TodayStats, Verdict, evaluate, position_size
+from zuntrading.risk import (
+    OpenPosition,
+    TodayStats,
+    Verdict,
+    confidence_multiplier,
+    evaluate,
+    position_size,
+)
 
-SETTINGS = load_settings(Path(__file__).resolve().parents[1] / "config.yaml", env_path=None)
+REPO_CONFIG = Path(__file__).resolve().parents[1] / "config.yaml"
+SETTINGS = load_settings(REPO_CONFIG, env_path=None, risk_profile="can_bang")
+RISKY = load_settings(REPO_CONFIG, env_path=None, risk_profile="mao_hiem")
 
 XAU = SymbolConfig(
     mt5="XAUUSD", market="gold", session="forex", yfinance="GC=F", binance=None,
@@ -95,6 +104,32 @@ def test_sizing_runtime_vpp_overrides_config():
 def test_sizing_degenerate_inputs_zero():
     assert position_size(sig(sl=2000.0, tp=2008.0), XAU, 10_000, SETTINGS) == (0.0, 0.0)  # dist 0
     assert position_size(sig(), XAU, 0, SETTINGS) == (0.0, 0.0)  # equity 0
+
+
+# --- confidence sizing (profile mạo hiểm) ---
+
+def test_confidence_multiplier_bounds():
+    assert confidence_multiplier(0.60, 0.60) == pytest.approx(0.7)   # tại ngưỡng → min
+    assert confidence_multiplier(1.00, 0.60) == pytest.approx(1.5)   # tuyệt đối → max
+    assert confidence_multiplier(0.80, 0.60) == pytest.approx(1.1)   # giữa → tuyến tính
+    assert confidence_multiplier(0.50, 0.60) == pytest.approx(0.7)   # dưới ngưỡng → clamp min
+    assert confidence_multiplier(0.9, 1.0) == 1.0                    # span 0 → neutral
+
+
+def test_confidence_sizing_scales_lots_in_mao_hiem():
+    # mạo hiểm: base 3% của 10k = $300. conf 0.6 (ngưỡng) → x0.7 = $210; conf 1.0 → x1.5 = $450
+    low = position_size(sig(confidence=0.60), XAU, 10_000, RISKY, confidence_threshold=0.60)
+    high = position_size(sig(confidence=1.00), XAU, 10_000, RISKY, confidence_threshold=0.60)
+    # budget 300×0.7=210 → raw 0.525 → floor 0.52 lot → risk 208; 300×1.5=450 → 1.12 lot → 448
+    assert low == (pytest.approx(0.52), pytest.approx(208.0))
+    assert high == (pytest.approx(1.12), pytest.approx(448.0))
+
+
+def test_confidence_sizing_off_in_can_bang():
+    # can_bang không bật confidence_sizing → conf cao không đổi size
+    a = position_size(sig(confidence=0.66), XAU, 10_000, SETTINGS, confidence_threshold=0.65)
+    b = position_size(sig(confidence=0.99), XAU, 10_000, SETTINGS, confidence_threshold=0.65)
+    assert a == b == (0.25, 100.0)
 
 
 # --- R7 ---

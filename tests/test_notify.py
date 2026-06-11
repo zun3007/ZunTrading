@@ -15,7 +15,7 @@ SIG = Signal(action="trade", direction="long", entry=2000.0, sl=1996.0, tp=2008.
 def settings_with_tg(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "42")
-    return load_settings(REPO_CONFIG, env_path=None)
+    return load_settings(REPO_CONFIG, env_path=None, risk_profile="can_bang")
 
 
 def test_send_success(monkeypatch):
@@ -60,7 +60,7 @@ def test_send_all_fail_returns_false_no_raise(monkeypatch):
 def test_send_skips_when_unconfigured(monkeypatch):
     for var in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
         monkeypatch.delenv(var, raising=False)
-    s = load_settings(REPO_CONFIG, env_path=None)
+    s = load_settings(REPO_CONFIG, env_path=None, risk_profile="can_bang")
     assert notify.send("hello", s) is False
 
 

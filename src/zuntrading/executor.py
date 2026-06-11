@@ -181,12 +181,25 @@ class MT5Executor:
         if tick is None:
             return ExecutionResult(False, None, None, f"không có tick cho {sym.mt5}")
         is_long = sig.direction == "long"
+        order_type = mt5.ORDER_TYPE_BUY if is_long else mt5.ORDER_TYPE_SELL
+        price = float(tick.ask if is_long else tick.bid)
+        # margin guard: không ăn quá 80% free margin — thiếu margin để server reject là quá muộn
+        try:
+            need = mt5.order_calc_margin(order_type, sym.mt5, float(lots), price)
+            acc = mt5.account_info()
+            if need is not None and acc is not None and need > float(acc.margin_free) * 0.8:
+                return ExecutionResult(
+                    False, None, None,
+                    f"margin cần {need:.2f} > 80% free margin ({float(acc.margin_free):.2f})",
+                )
+        except Exception as e:  # noqa: BLE001 — margin check lỗi thì để server quyết
+            log.warning("order_calc_margin lỗi (%s) — tiếp tục, server sẽ kiểm", e)
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": sym.mt5,
             "volume": float(lots),
-            "type": mt5.ORDER_TYPE_BUY if is_long else mt5.ORDER_TYPE_SELL,
-            "price": float(tick.ask if is_long else tick.bid),
+            "type": order_type,
+            "price": price,
             "sl": float(sig.sl),
             "tp": float(sig.tp),
             "deviation": 20,
