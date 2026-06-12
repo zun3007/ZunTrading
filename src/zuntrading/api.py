@@ -40,18 +40,50 @@ _scan_state = {"running": False, "last_result": None}
 _mt5_cache: dict = {"executor": None, "mode": None}
 
 
-def _mt5_equity(settings: Settings) -> float | None:
-    """Equity THẬT từ MT5 terminal (cached connection). None nếu MT5 chưa sẵn sàng."""
-    from .executor import ExecutorUnavailable, MT5Executor
+def _mt5_executor(settings: Settings):
+    from .executor import MT5Executor
 
     current_mode = runmode.get_mode()
     if _mt5_cache["executor"] is None or _mt5_cache["mode"] != current_mode:
         _mt5_cache["executor"] = MT5Executor(settings, current_mode)
         _mt5_cache["mode"] = current_mode
+    return _mt5_cache["executor"]
+
+
+def _mt5_equity(settings: Settings) -> float | None:
+    """Equity THẬT từ MT5 terminal (cached connection). None nếu MT5 chưa sẵn sàng."""
     try:
-        return round(_mt5_cache["executor"].equity(), 2)
-    except (ExecutorUnavailable, Exception):  # noqa: BLE001 — terminal tắt/chưa login
+        return round(_mt5_executor(settings).equity(), 2)
+    except Exception:  # noqa: BLE001 — terminal tắt/chưa login
         _mt5_cache["executor"] = None  # reset để lần sau thử connect lại
+        return None
+
+
+def _mt5_positions(settings: Settings) -> list[dict] | None:
+    """Vị thế THẬT trên sàn + floating P&L từ terminal. None nếu MT5 không sẵn sàng.
+
+    Đây là NGUỒN SỰ THẬT khi MT5 connected — journal chỉ là sổ ghi của bot."""
+    try:
+        ex = _mt5_executor(settings)
+        mt5 = ex._mt5()  # noqa: SLF001 — API nội bộ cùng package
+        out = []
+        for p in mt5.positions_get() or ():
+            out.append({
+                "ticket": str(p.ticket),
+                "symbol": p.symbol,
+                "direction": "long" if p.type == 0 else "short",
+                "lots": p.volume,
+                "entry": p.price_open,
+                "current": p.price_current,
+                "sl": p.sl,
+                "tp": p.tp,
+                "profit": round(p.profit + getattr(p, "swap", 0.0), 2),  # floating P&L
+                "ts": p.time,
+                "is_bot": getattr(p, "magic", 0) == 20260611,
+            })
+        return out
+    except Exception:  # noqa: BLE001
+        _mt5_cache["executor"] = None
         return None
 
 
@@ -138,6 +170,12 @@ def status():
             }
             for r in journal.open_orders_rows()
         ]
+        mt5_connected = settings.mt5.present or settings.mt5_live.present
+        exchange_positions = _mt5_positions(settings) if mt5_connected else None
+        floating_pnl = (
+            round(sum(p["profit"] for p in exchange_positions), 2)
+            if exchange_positions else 0.0
+        )
         return {
             "mode": state.mode,
             "paused": state.paused,
@@ -151,6 +189,8 @@ def status():
             },
             "summary": journal.daily_summary(),
             "open_positions": open_rows,
+            "exchange_positions": exchange_positions,  # None = MT5 chưa kết nối
+            "floating_pnl": floating_pnl,
             "last_heartbeat": dict(hb) if hb else None,
             "risk": {
                 "max_risk_per_trade_pct": settings.risk.max_risk_per_trade_pct,

@@ -89,7 +89,20 @@ function renderStatus(s) {
   const pnlEl = $("#todayPnl");
   pnlEl.textContent = fmtUsd(pnl);
   pnlEl.className = "num num-lg " + (pnl > 0 ? "pnl-pos" : pnl < 0 ? "pnl-neg" : "");
-  $("#openCount").textContent = s.open_positions.length;
+
+  // Floating P&L realtime từ sàn (chỉ có nghĩa khi MT5 connected)
+  const fEl = $("#floatingPnl");
+  if (s.exchange_positions !== null && s.exchange_positions !== undefined) {
+    const f = s.floating_pnl;
+    fEl.textContent = fmtUsd(f);
+    fEl.className = "num num-lg " + (f > 0 ? "pnl-pos" : f < 0 ? "pnl-neg" : "");
+  } else {
+    fEl.textContent = "—";
+    fEl.className = "num num-lg muted";
+  }
+  const exCount = (s.exchange_positions || []).length;
+  const paperCount = s.open_positions.filter((p) => p.executor === "paper").length;
+  $("#openCount").textContent = paperCount ? `${exCount} +${paperCount}p` : exCount;
 
   $("#pauseBanner").hidden = !s.paused;
   $("#pauseBtn").textContent = s.paused ? "Chạy lại" : "Tạm dừng";
@@ -136,7 +149,7 @@ function renderStatus(s) {
     <div class="row"><span>MT5 demo</span><span class="${s.mt5_demo_configured ? "tag-ok" : "tag-no"}">${s.mt5_demo_configured ? "đã cấu hình" : "chưa cấu hình"}</span></div>
     <div class="row"><span>MT5 live</span><span class="${s.mt5_live_configured ? "tag-ok" : "tag-no"}">${s.mt5_live_configured ? "đã cấu hình" : "chưa cấu hình"}</span></div>`;
 
-  renderPositions(s.open_positions);
+  renderPositions(s);
 }
 
 /* ---------- Tables ---------- */
@@ -148,15 +161,43 @@ const tableWrap = (head, rows, emptyMsg) =>
 const dirBadge = (d) => `<span class="dir ${d === "long" ? "dir-long" : "dir-short"}">${d === "long" ? "▲ LONG" : "▼ SHORT"}</span>`;
 const pnlCell = (v) => (v === null || v === undefined) ? `<span class="muted">đang mở</span>` : `<span class="num ${v >= 0 ? "pnl-pos" : "pnl-neg"}">${fmtUsd(v)}</span>`;
 
-function renderPositions(rows) {
-  $("#tab-positions").innerHTML = tableWrap(
-    `<th>Symbol</th><th>Hướng</th><th class="num">Lots</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">Risk $</th><th>Mở lúc</th>`,
-    rows.map((p) => `<tr><td><b>${esc(p.symbol)}</b></td><td>${dirBadge(p.direction)}</td>
-      <td class="num">${fmtNum(p.lots)}</td><td class="num">${fmtNum(p.entry, 5)}</td>
-      <td class="num pnl-neg">${fmtNum(p.sl, 5)}</td><td class="num pnl-pos">${fmtNum(p.tp, 5)}</td>
-      <td class="num">${fmtNum(p.risk_amount)}</td><td class="muted">${tsLocal(p.ts)}</td></tr>`),
-    "Không có vị thế mở. Bot sẽ vào lệnh khi có setup vượt qua não + risk gate."
-  );
+function renderPositions(s) {
+  const ex = s.exchange_positions;
+  const paper = s.open_positions.filter((p) => p.executor === "paper");
+  let html = "";
+
+  // Nguồn sự thật: SÀN (floating P&L realtime từ terminal)
+  if (ex === null || ex === undefined) {
+    html += `<div class="src-head">Trên sàn (Exness)</div>
+      <div class="empty">MT5 terminal chưa kết nối — mở MT5 lên để thấy vị thế thật + P&L live.</div>`;
+  } else if (!ex.length) {
+    html += `<div class="src-head">Trên sàn (Exness)</div>
+      <div class="empty">Sàn sạch — không có vị thế nào đang mở. Bot vào lệnh là hiện ở đây với P&L nhảy realtime.</div>`;
+  } else {
+    html += `<div class="src-head">Trên sàn (Exness) — P&L cập nhật live</div>` + tableWrap(
+      `<th>Symbol</th><th>Hướng</th><th class="num">Lots</th><th class="num">Entry</th><th class="num">Giá now</th><th class="num">SL</th><th class="num">TP</th><th class="num">P&L</th><th>Bot?</th>`,
+      ex.map((p) => `<tr><td><b>${esc(p.symbol)}</b></td><td>${dirBadge(p.direction)}</td>
+        <td class="num">${fmtNum(p.lots)}</td><td class="num">${fmtNum(p.entry, 5)}</td>
+        <td class="num">${fmtNum(p.current, 5)}</td>
+        <td class="num pnl-neg">${fmtNum(p.sl, 5)}</td><td class="num pnl-pos">${fmtNum(p.tp, 5)}</td>
+        <td><span class="num ${p.profit >= 0 ? "pnl-pos" : "pnl-neg"}">${fmtUsd(p.profit)}</span></td>
+        <td class="muted">${p.is_bot ? "🤖 bot" : "tay"}</td></tr>`),
+      ""
+    );
+  }
+
+  // Sổ paper — mô phỏng, KHÔNG nằm trên sàn (tránh hiểu nhầm như trước)
+  if (paper.length) {
+    html += `<div class="src-head src-paper">Paper — mô phỏng trong sổ bot, KHÔNG có trên sàn</div>` + tableWrap(
+      `<th>Symbol</th><th>Hướng</th><th class="num">Lots</th><th class="num">Entry</th><th class="num">SL</th><th class="num">TP</th><th class="num">Risk $</th><th>Mở lúc</th>`,
+      paper.map((p) => `<tr class="row-paper"><td><b>${esc(p.symbol)}</b> <span class="tag-paper">PAPER</span></td><td>${dirBadge(p.direction)}</td>
+        <td class="num">${fmtNum(p.lots)}</td><td class="num">${fmtNum(p.entry, 5)}</td>
+        <td class="num pnl-neg">${fmtNum(p.sl, 5)}</td><td class="num pnl-pos">${fmtNum(p.tp, 5)}</td>
+        <td class="num">${fmtNum(p.risk_amount)}</td><td class="muted">${tsLocal(p.ts)}</td></tr>`),
+      ""
+    );
+  }
+  $("#tab-positions").innerHTML = html;
 }
 
 async function loadOrders() {

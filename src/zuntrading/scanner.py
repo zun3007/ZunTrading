@@ -119,8 +119,8 @@ def _process_symbol(
 
         vpp = executor.value_per_point(sym)
         verdict = evaluate(
-            sig, sym, equity, journal.open_positions(), journal.today_stats(),
-            threshold, settings, value_per_point=vpp,
+            sig, sym, equity, journal.open_positions(executor=executor.name),
+            journal.today_stats(), threshold, settings, value_per_point=vpp,
         )
         journal.record_signal(cand, sig, verdict)
 
@@ -159,12 +159,15 @@ def run_cycle(
         journal.heartbeat(profile_name, 0, 0, 0, 0)
         return stats
 
-    # 0. chốt outcome các lệnh đã đóng từ cycle trước
+    # 0. chốt outcome các lệnh đã đóng từ cycle trước — sync CẢ paper lẫn executor
+    # active (lệnh paper cũ phải được đóng dần kể cả khi bot đã chuyển sang MT5)
     try:
-        if isinstance(executor, PaperExecutor):
-            stats.closed_by_sync = executor.sync_outcomes(_latest_hlc)
-        else:
-            stats.closed_by_sync = executor.sync_outcomes(journal)
+        paper_sync = (
+            executor if isinstance(executor, PaperExecutor) else PaperExecutor(settings, journal)
+        )
+        stats.closed_by_sync = paper_sync.sync_outcomes(_latest_hlc)
+        if not isinstance(executor, PaperExecutor):
+            stats.closed_by_sync += executor.sync_outcomes(journal)
     except Exception as e:  # noqa: BLE001
         stats.errors += 1
         log.error("sync outcomes lỗi: %s", e)

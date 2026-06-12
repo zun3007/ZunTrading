@@ -144,10 +144,17 @@ class Journal:
                 pnl += r["pnl"]
         return TodayStats(trades_by_market=trades, realized_pnl=round(pnl, 2))
 
-    def open_positions(self) -> list[OpenPosition]:
+    def open_positions(self, executor: str | None = None) -> list[OpenPosition]:
+        """Vị thế mở trong sổ. executor='mt5'/'paper' để lọc — risk gate chỉ được
+        đếm vị thế CỦA executor đang trade, không để lệnh mô phỏng chiếm slot thật."""
+        q = "SELECT * FROM orders WHERE status='open'"
+        params: tuple = ()
+        if executor:
+            q += " AND executor=?"
+            params = (executor,)
         return [
             OpenPosition(symbol=r["symbol"], market=r["market"], risk_amount=r["risk_amount"])
-            for r in self.conn.execute("SELECT * FROM orders WHERE status='open'")
+            for r in self.conn.execute(q, params)
         ]
 
     def open_orders_rows(self) -> list[sqlite3.Row]:

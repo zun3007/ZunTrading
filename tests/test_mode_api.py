@@ -122,6 +122,34 @@ def test_status_endpoint_shape(client, env):
     assert s["risk"]["min_rr"] == 1.5
 
 
+def test_status_exchange_positions_and_floating_pnl(client, env, monkeypatch):
+    monkeypatch.setenv("MT5_LOGIN", "123")
+    monkeypatch.setenv("MT5_PASSWORD", "x")
+    monkeypatch.setenv("MT5_SERVER", "Exness-MT5Trial")
+    fake_pos = [
+        {"ticket": "1", "symbol": "XAUUSD", "direction": "long", "lots": 0.01,
+         "entry": 2600.0, "current": 2610.0, "sl": 2590.0, "tp": 2630.0,
+         "profit": 10.0, "ts": 0, "is_bot": True},
+        {"ticket": "2", "symbol": "BTCUSD", "direction": "short", "lots": 0.02,
+         "entry": 64000.0, "current": 64100.0, "sl": 64500.0, "tp": 63000.0,
+         "profit": -2.0, "ts": 0, "is_bot": False},
+    ]
+    monkeypatch.setattr(api, "_mt5_positions", lambda s: fake_pos)
+    monkeypatch.setattr(api, "_mt5_equity", lambda s: 508.0)
+    s = client.get("/api/status").json()
+    assert s["exchange_positions"][0]["profit"] == 10.0
+    assert s["floating_pnl"] == 8.0  # 10 - 2
+
+
+def test_journal_open_positions_filter_by_executor(env):
+    seed(env)  # paper order
+    j = Journal(env["db"])
+    assert len(j.open_positions()) == 1
+    assert len(j.open_positions(executor="paper")) == 1
+    assert j.open_positions(executor="mt5") == []  # paper KHÔNG chiếm slot risk của mt5
+    j.close()
+
+
 def test_status_shows_real_mt5_equity_when_connected(client, env, monkeypatch):
     monkeypatch.setenv("MT5_LOGIN", "123")
     monkeypatch.setenv("MT5_PASSWORD", "x")
