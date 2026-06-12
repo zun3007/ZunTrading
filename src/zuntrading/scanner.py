@@ -91,7 +91,8 @@ def _hlc_lookup(settings: Settings):
         sym = by_name.get(symbol)
         if sym is None:
             raise KeyError(f"{symbol} không còn trong config — không sync được giá")
-        df = get_candles(sym, "M15", 5)
+        # n=40: guard của get_candles từ chối <30 nến (đủ cho indicator) — lookup chỉ cần nến cuối
+        df = get_candles(sym, "M15", 40)
         row = df.iloc[-1]
         return float(row["high"]), float(row["low"]), float(row["close"])
 
