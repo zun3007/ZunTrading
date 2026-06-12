@@ -36,11 +36,17 @@ function initChart() {
 }
 
 async function loadCurve() {
-  const data = await api("/api/equity-curve?executor=paper");
+  const src = state.curveSource || state.status?.pnl_source || "paper";
+  document.querySelectorAll("#curveSeg button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.src === src));
+  const data = await api(`/api/equity-curve?executor=${src}`);
   const empty = $("#chartEmpty"), chartEl = $("#chart");
   if (!data.points.length) {
     empty.hidden = false; chartEl.style.display = "none";
-    $("#curveHint").textContent = `bắt đầu từ ${fmtUsd(data.start)}`;
+    $("#curveHint").textContent = `sổ ${src === "mt5" ? "sàn" : "paper"} — bắt đầu từ ${fmtUsd(data.start)}`;
+    $("#chartEmpty").textContent = src === "mt5"
+      ? "Sàn chưa có lệnh đóng nào — đường equity thật sẽ vẽ từ kết quả đầu tiên trên Exness."
+      : "Sổ paper chưa có lệnh đóng nào.";
     return;
   }
   empty.hidden = true; chartEl.style.display = "";
@@ -55,8 +61,13 @@ async function loadCurve() {
   state.chart.timeScale().fitContent();
   const last = pts[pts.length - 1].value;
   const delta = last - data.start;
-  $("#curveHint").innerHTML = `${pts.length} lệnh đóng · <span class="${delta >= 0 ? "pnl-pos" : "pnl-neg"} num">${fmtUsd(delta)}</span> so với vốn gốc`;
+  const srcLabel = (state.curveSource || state.status?.pnl_source) === "mt5" ? "sàn" : "paper";
+  $("#curveHint").innerHTML = `sổ ${srcLabel} · ${pts.length} lệnh đóng · <span class="${delta >= 0 ? "pnl-pos" : "pnl-neg"} num">${fmtUsd(delta)}</span> so với vốn gốc`;
 }
+
+document.querySelectorAll("#curveSeg button").forEach((b) =>
+  b.addEventListener("click", () => { state.curveSource = b.dataset.src; loadCurve(); })
+);
 
 /* ---------- Status ---------- */
 function setEquity(el, value) {
@@ -85,10 +96,15 @@ function renderStatus(s) {
       ? "Equity (paper — mở MT5 terminal để thấy số thật)" : "Equity (paper)";
     setEquity($("#equity"), s.paper_equity);
   }
+  // P&L hôm nay = sổ của executor ACTIVE; paper hiện phụ chú nhỏ nếu khác 0
   const pnl = s.today.realized_pnl;
   const pnlEl = $("#todayPnl");
-  pnlEl.textContent = fmtUsd(pnl);
+  const paperPnl = s.today.realized_pnl_paper;
+  const paperNote = (s.pnl_source === "mt5" && paperPnl !== 0)
+    ? ` <span class="muted" style="font-size:11px">(paper ${fmtUsd(paperPnl)})</span>` : "";
+  pnlEl.innerHTML = fmtUsd(pnl) + paperNote;
   pnlEl.className = "num num-lg " + (pnl > 0 ? "pnl-pos" : pnl < 0 ? "pnl-neg" : "");
+  $("#todayPnlLabel").textContent = `P&L hôm nay (${s.pnl_source === "mt5" ? "sàn" : "paper"})`;
 
   // Floating P&L realtime từ sàn (chỉ có nghĩa khi MT5 connected)
   const fEl = $("#floatingPnl");
@@ -110,9 +126,9 @@ function renderStatus(s) {
   scanBtn.disabled = s.scan_running;
   scanBtn.textContent = s.scan_running ? "Đang quét…" : "Scan ngay";
 
-  // Hôm nay
+  // Hôm nay — số liệu theo sổ active, ghi rõ nguồn
   const sum = s.summary;
-  $("#dayLabel").textContent = sum.day_vn;
+  $("#dayLabel").textContent = `${sum.day_vn} · sổ ${s.pnl_source === "mt5" ? "sàn" : "paper"}`;
   $("#todayStats").innerHTML = [
     ["Signals", sum.signals_total], ["Được duyệt", sum.signals_approved],
     ["Lệnh đóng", sum.trades_closed], ["Win rate", sum.win_rate === null ? "—" : Math.round(sum.win_rate * 100) + "%"],
@@ -364,6 +380,10 @@ async function refresh() {
     state.status = s;
     $("#connBanner").hidden = true;
     renderStatus(s);
+    if (!state.curveInit) {
+      state.curveInit = true;
+      loadCurve(); // lần đầu: vẽ theo sổ active thật (status giờ mới biết mt5/paper)
+    }
   } catch {
     $("#connBanner").hidden = false;
   }

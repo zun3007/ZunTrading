@@ -130,15 +130,24 @@ class Journal:
 
     # --- đọc ---
 
-    def today_stats(self, now: datetime | None = None) -> TodayStats:
+    def today_stats(self, now: datetime | None = None, executor: str | None = None) -> TodayStats:
+        """Thống kê hôm nay (giờ VN). executor để tách sổ: lỗ PAPER không được
+        kích hoạt circuit-breaker của bot THẬT và ngược lại."""
         day = today_vn(now)
+        ex_clause = " AND executor=?" if executor else ""
         trades: dict[str, int] = {}
-        for r in self.conn.execute("SELECT ts_utc, market FROM orders WHERE status != 'failed'"):
+        for r in self.conn.execute(
+            f"SELECT ts_utc, market FROM orders WHERE status != 'failed'{ex_clause}",  # noqa: S608
+            (executor,) if executor else (),
+        ):
             if _vn_day(r["ts_utc"]) == day:
                 trades[r["market"]] = trades.get(r["market"], 0) + 1
         pnl = 0.0
         for r in self.conn.execute(
-            "SELECT o.ts_closed_utc, o.pnl FROM outcomes o"
+            "SELECT oc.ts_closed_utc, oc.pnl FROM outcomes oc"
+            " JOIN orders o ON o.id = oc.order_id"
+            + (" WHERE o.executor=?" if executor else ""),
+            (executor,) if executor else (),
         ):
             if _vn_day(r["ts_closed_utc"]) == day:
                 pnl += r["pnl"]
@@ -191,16 +200,18 @@ class Journal:
         )
         return [(float(r["conf"]), r["result"] == "win") for r in rows]
 
-    def daily_summary(self, now: datetime | None = None) -> dict:
+    def daily_summary(self, now: datetime | None = None, executor: str | None = None) -> dict:
         day = today_vn(now)
         sigs = [
             r for r in self.conn.execute("SELECT * FROM signals")
             if _vn_day(r["ts_utc"]) == day
         ]
+        ex_clause = " WHERE o.executor=?" if executor else ""
         closed = [
             r for r in self.conn.execute(
                 "SELECT o.market, o.symbol, oc.pnl, oc.result, oc.ts_closed_utc"
-                " FROM outcomes oc JOIN orders o ON o.id = oc.order_id"
+                " FROM outcomes oc JOIN orders o ON o.id = oc.order_id" + ex_clause,
+                (executor,) if executor else (),
             )
             if _vn_day(r["ts_closed_utc"]) == day
         ]

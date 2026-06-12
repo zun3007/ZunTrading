@@ -176,6 +176,8 @@ def status():
             round(sum(p["profit"] for p in exchange_positions), 2)
             if exchange_positions else 0.0
         )
+        # Nguồn P&L hiển thị = sổ của executor đang ACTIVE; paper là sổ phụ tách riêng
+        pnl_source = "mt5" if exchange_positions is not None else "paper"
         return {
             "mode": state.mode,
             "paused": state.paused,
@@ -183,11 +185,13 @@ def status():
             "paper_equity": paper.equity(),
             "mt5_equity": _mt5_equity(settings) if settings.mt5.present or settings.mt5_live.present else None,
             "reference_equity": settings.reference_equity,
+            "pnl_source": pnl_source,
             "today": {
                 "trades_by_market": today.trades_by_market,
-                "realized_pnl": today.realized_pnl,
+                "realized_pnl": journal.today_stats(executor=pnl_source).realized_pnl,
+                "realized_pnl_paper": journal.today_stats(executor="paper").realized_pnl,
             },
-            "summary": journal.daily_summary(),
+            "summary": journal.daily_summary(executor=pnl_source),
             "open_positions": open_rows,
             "exchange_positions": exchange_positions,  # None = MT5 chưa kết nối
             "floating_pnl": floating_pnl,

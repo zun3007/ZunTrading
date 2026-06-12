@@ -134,6 +134,36 @@ def test_calibration_per_market_isolation(j):
     assert threshold_for(j, "forex", SETTINGS) == SETTINGS.risk.default_confidence
 
 
+# --- tách sổ paper / mt5 ---
+
+def place_mt5(j, pnl=None):
+    sig = SIG
+    sid = j.record_signal(CAND, sig, OK)
+    oid = j.record_order(sid, "mt5", "777", "XAUUSD", "gold", sig, 0.25, 100.0)
+    if pnl is not None:
+        j.record_outcome(oid, 2008.0, pnl)
+    return oid
+
+
+def test_today_stats_isolated_by_executor(j):
+    place(j, pnl=-300.0)       # paper LỖ đậm
+    place_mt5(j, pnl=50.0)     # mt5 lời nhẹ
+    assert j.today_stats(executor="paper").realized_pnl == -300.0
+    assert j.today_stats(executor="mt5").realized_pnl == 50.0
+    assert j.today_stats().realized_pnl == -250.0  # không filter = tổng
+    # R5 của bot mt5 KHÔNG bị lỗ paper kích hoạt: -300 paper không lọt vào sổ mt5
+    assert j.today_stats(executor="mt5").trades_by_market == {"gold": 1}
+
+
+def test_daily_summary_isolated_by_executor(j):
+    place(j, pnl=-300.0)
+    place_mt5(j, pnl=50.0)
+    s_mt5 = j.daily_summary(executor="mt5")
+    assert s_mt5["trades_closed"] == 1 and s_mt5["realized_pnl"] == 50.0
+    s_paper = j.daily_summary(executor="paper")
+    assert s_paper["realized_pnl"] == -300.0
+
+
 # --- trading memory ---
 
 def test_setup_stats_empty_then_tracks(j):

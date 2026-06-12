@@ -132,7 +132,8 @@ def _process_symbol(
         vpp = executor.value_per_point(sym)
         verdict = evaluate(
             sig, sym, equity, journal.open_positions(executor=executor.name),
-            journal.today_stats(), threshold, settings, value_per_point=vpp,
+            journal.today_stats(executor=executor.name), threshold, settings,
+            value_per_point=vpp,
         )
         journal.record_signal(cand, sig, verdict)
 

@@ -25,7 +25,7 @@
         <span class="num num-lg" id="floatingPnl">—</span>
       </div>
       <div class="ticker-item">
-        <span class="label">P&amp;L hôm nay</span>
+        <span class="label" id="todayPnlLabel">P&amp;L hôm nay</span>
         <span class="num num-lg" id="todayPnl">—</span>
       </div>
       <div class="ticker-item">
@@ -47,7 +47,12 @@
       <div class="card">
         <div class="card-head">
           <h2>Đường equity</h2>
-          <span class="hint" id="curveHint"></span>
+          <span style="display:flex;gap:10px;align-items:center">
+            <span class="hint" id="curveHint"></span>
+            <span class="seg seg-mini" id="curveSeg" role="radiogroup" aria-label="Nguồn equity">
+              <button data-src="mt5">Sàn</button><button data-src="paper">Paper</button>
+            </span>
+          </span>
         </div>
         <div id="chart" class="chart"></div>
         <div id="chartEmpty" class="empty" hidden>
