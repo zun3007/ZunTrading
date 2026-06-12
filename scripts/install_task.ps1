@@ -26,12 +26,17 @@ function Register-ZunTask($name, $args_, $trigger) {
     Write-Host "Đã đăng ký $name"
 }
 
+# Align vào ranh giới nến: quét NGAY SAU khi nến đóng (+30s cho data source kịp),
+# không phải thời điểm ngẫu nhiên theo giờ cài — signal sớm tối đa ~14 phút so với lệch pha.
 $now = Get-Date
+$dayStart = $now.Date.AddHours($now.Hour).AddMinutes([math]::Floor($now.Minute / 15) * 15).AddMinutes(15).AddSeconds(30)
+$swingStart = $now.Date.AddHours([math]::Floor($now.Hour / 4) * 4).AddHours(4).AddMinutes(1)
+
 Register-ZunTask "ZunTrading-Scan-Day" "-m zuntrading.scanner --profile day --executor auto" `
-    (New-ScheduledTaskTrigger -Once -At $now -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Days 3650))
+    (New-ScheduledTaskTrigger -Once -At $dayStart -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Days 3650))
 
 Register-ZunTask "ZunTrading-Scan-Swing" "-m zuntrading.scanner --profile swing --executor auto" `
-    (New-ScheduledTaskTrigger -Once -At $now -RepetitionInterval (New-TimeSpan -Hours 4) -RepetitionDuration (New-TimeSpan -Days 3650))
+    (New-ScheduledTaskTrigger -Once -At $swingStart -RepetitionInterval (New-TimeSpan -Hours 4) -RepetitionDuration (New-TimeSpan -Days 3650))
 
 Register-ZunTask "ZunTrading-Report" "-m zuntrading.reporter" `
     (New-ScheduledTaskTrigger -Daily -At "21:00")

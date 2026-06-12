@@ -34,14 +34,20 @@ class Signal:
     reason: str
 
 
-TRIAGE_PROMPT = """Bạn là bộ lọc setup giao dịch. Cho candidate sau (đã qua pre-filter kỹ thuật):
+TRIAGE_PROMPT = """Bạn là bộ lọc RÁC setup giao dịch — tầng rẻ đứng trước model đắt hơn.
+Vai trò của bạn: CHỈ loại những candidate RÕ RÀNG xấu. Bạn KHÔNG phải người quyết định cuối.
 
+Candidate (đã qua pre-filter kỹ thuật, số liệu THẬT):
 {candidate}
 
-Trả lời DUY NHẤT một JSON object, không markdown, không giải thích thêm:
-{{"worth_analysis": true/false, "note": "<= 15 từ"}}
+Quy tắc:
+- worth_analysis=false CHỈ KHI có lý do cụ thể rõ ràng (ngược trend mạnh, chỉ số mâu thuẫn
+  nặng, giá đang vùng nhiễu không cấu trúc).
+- Lưng chừng / nghi ngờ → worth_analysis=true — để model quyết định cuối phân tích sâu.
+  Sau bạn còn 2 tầng bảo vệ nữa (model đắt + risk gate code).
 
-worth_analysis=true CHỈ khi cấu trúc kỹ thuật rõ ràng và đáng để phân tích sâu."""
+Trả lời DUY NHẤT một JSON object, không markdown:
+{{"worth_analysis": true/false, "note": "<= 15 từ lý do"}}"""
 
 DECISION_PROMPT = """Bạn là trader kỷ luật, quản trị rủi ro là ưu tiên số 1. KHÔNG bao giờ bịa số liệu.
 
@@ -260,7 +266,13 @@ def triage(candidate: Candidate, settings: Settings) -> bool:
             "triage không trả JSON → bỏ candidate %s (text: %.200s)", candidate.symbol, text
         )
         return False
-    return bool(obj.get("worth_analysis", False))
+    worth = bool(obj.get("worth_analysis", False))
+    if not worth:
+        log.info(
+            "triage bỏ %s %s — lý do: %s",
+            candidate.symbol, candidate.setup_type, obj.get("note", "(không ghi)"),
+        )
+    return worth
 
 
 def decide(
