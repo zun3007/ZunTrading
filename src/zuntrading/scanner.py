@@ -287,9 +287,11 @@ def run_sync_only(settings: Settings, journal: Journal, executor) -> int:
             executor if isinstance(executor, PaperExecutor) else PaperExecutor(settings, journal)
         )
         closed = paper_sync.sync_outcomes(_hlc_lookup(settings))
+        moved = 0
         if not isinstance(executor, PaperExecutor):
             closed += executor.sync_outcomes(journal)
-        log.info("sync-only xong: closed=%d", closed)
+            moved = executor.manage_positions(journal)  # breakeven/trailing mỗi 5'
+        log.info("sync-only xong: closed=%d sl_moved=%d", closed, moved)
         return 0
     except Exception as e:  # noqa: BLE001
         log.error("sync-only lỗi: %s", e)

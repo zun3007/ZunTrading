@@ -167,7 +167,10 @@ class Journal:
             q += " AND executor=?"
             params = (executor,)
         return [
-            OpenPosition(symbol=r["symbol"], market=r["market"], risk_amount=r["risk_amount"])
+            OpenPosition(
+                symbol=r["symbol"], market=r["market"],
+                risk_amount=r["risk_amount"], direction=r["direction"],
+            )
             for r in self.conn.execute(q, params)
         ]
 
@@ -237,6 +240,41 @@ class Journal:
             "open_positions": len(self.open_positions()),
             "heartbeats": len(beats),
             "errors": sum(r["errors"] or 0 for r in beats),
+        }
+
+    def weekly_digest(self, days: int = 7) -> dict:
+        """Nguyên liệu cho não họp tổng kết tuần: stats per (symbol, setup) + reject patterns."""
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        perf = [
+            dict(r) for r in self.conn.execute(
+                "SELECT o.symbol, s.setup_type, COUNT(*) AS n,"
+                " SUM(CASE WHEN oc.result='win' THEN 1 ELSE 0 END) AS wins,"
+                " ROUND(SUM(oc.pnl), 2) AS pnl"
+                " FROM outcomes oc JOIN orders o ON o.id=oc.order_id"
+                " JOIN signals s ON s.id=o.signal_id"
+                " WHERE oc.ts_closed_utc >= ? GROUP BY o.symbol, s.setup_type"
+                " ORDER BY pnl ASC",
+                (cutoff,),
+            )
+        ]
+        rejects = [
+            dict(r) for r in self.conn.execute(
+                "SELECT reject_reasons, COUNT(*) AS n FROM signals"
+                " WHERE approved=0 AND ts_utc >= ? AND reject_reasons IS NOT NULL"
+                " GROUP BY reject_reasons ORDER BY n DESC LIMIT 10",
+                (cutoff,),
+            )
+        ]
+        sig_stats = self.conn.execute(
+            "SELECT COUNT(*) AS total, SUM(approved) AS approved FROM signals WHERE ts_utc >= ?",
+            (cutoff,),
+        ).fetchone()
+        return {
+            "days": days,
+            "performance": perf,
+            "top_rejects": rejects,
+            "signals_total": sig_stats["total"],
+            "signals_approved": sig_stats["approved"] or 0,
         }
 
     def dump_signal(self, cand: Candidate) -> str:

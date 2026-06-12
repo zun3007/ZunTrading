@@ -28,6 +28,14 @@ class OpenPosition:
     symbol: str
     market: str
     risk_amount: float  # USD mất nếu chạm SL
+    direction: str = "long"
+
+
+def correlation_cluster(market: str) -> str:
+    """Cụm tương quan: vàng+bạc chạy cùng nhịp; mỗi market khác tự là một cụm.
+
+    R9 dùng cụm này: 2 lệnh cùng cụm cùng chiều = một ý tưởng ăn double risk."""
+    return "metals" if market in ("gold", "silver") else market
 
 
 @dataclass(frozen=True)
@@ -134,6 +142,20 @@ def evaluate(
     same_symbol = sum(1 for p in open_positions if p.symbol == sym.mt5)
     if same_symbol >= settings.risk.max_open_positions_per_symbol:
         reasons.append(f"R4b: đã có {same_symbol} vị thế mở trên {sym.mt5}")
+
+    # R9 — correlation guard: cùng cụm tương quan + cùng chiều = double risk một ý tưởng
+    cluster = correlation_cluster(sym.market)
+    twin = next(
+        (p for p in open_positions
+         if p.symbol != sym.mt5
+         and correlation_cluster(p.market) == cluster
+         and p.direction == sig.direction),
+        None,
+    )
+    if twin is not None:
+        reasons.append(
+            f"R9: đã có {twin.symbol} {twin.direction} cùng cụm '{cluster}' — không chồng ý tưởng"
+        )
 
     # R1 — sizing trong budget (× confidence nếu profile bật)
     lots, risk_amount = position_size(

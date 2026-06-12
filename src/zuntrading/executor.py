@@ -293,6 +293,67 @@ class MT5Executor:
             True, str(result.order), None, f"limit chờ retest @ {sig.entry:g} (hết hạn {expiry_min}')"
         )
 
+    # Quản lý lệnh đang chạy (chạy mỗi 5' qua task Sync):
+    #   +1R → dời SL về entry (breakeven: từ đây hết thua)
+    #   +2R → trailing SL giữ khoảng cách 1R sau giá (chỉ dời theo hướng lời, không bao giờ lùi)
+    BREAKEVEN_AT_R = 1.0
+    TRAIL_START_R = 2.0
+    TRAIL_DIST_R = 1.0
+
+    def manage_positions(self, journal: Journal) -> int:
+        """Breakeven + trailing cho positions của bot. Trả số lệnh được dời SL."""
+        mt5 = self._mt5()
+        # SL GỐC lấy từ journal (position.sl trên server đã bị các lần dời trước thay đổi)
+        orig_sl = {
+            str(r["ticket"]): (float(r["entry"]), float(r["sl"]), r["direction"])
+            for r in journal.open_orders_rows()
+            if r["executor"] == self.name and r["ticket"]
+        }
+        moved = 0
+        for p in mt5.positions_get() or ():
+            if getattr(p, "magic", 0) != MAGIC:
+                continue  # không đụng lệnh user vào tay
+            rec = orig_sl.get(str(p.ticket))
+            if rec is None:
+                continue
+            entry, sl0, direction = rec
+            risk_dist = abs(entry - sl0)
+            if risk_dist <= 0:
+                continue
+            sign = 1.0 if direction == "long" else -1.0
+            profit_dist = (float(p.price_current) - entry) * sign
+            r_multiple = profit_dist / risk_dist
+
+            new_sl = None
+            if r_multiple >= self.TRAIL_START_R:
+                candidate = float(p.price_current) - sign * self.TRAIL_DIST_R * risk_dist
+                if (candidate - float(p.sl)) * sign > 0:  # chỉ dời THEO hướng lời
+                    new_sl = candidate
+            elif r_multiple >= self.BREAKEVEN_AT_R and (entry - float(p.sl)) * sign > 0:
+                new_sl = entry  # breakeven
+
+            if new_sl is None:
+                continue
+            req = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "position": p.ticket,
+                "symbol": p.symbol,
+                "sl": round(new_sl, 5),
+                "tp": float(p.tp),
+            }
+            result = mt5.order_send(req)
+            if result is not None and result.retcode == mt5.TRADE_RETCODE_DONE:
+                moved += 1
+                log.info(
+                    "manage: %s #%s +%.1fR → SL %.5f (%s)",
+                    p.symbol, p.ticket, r_multiple, new_sl,
+                    "trailing" if r_multiple >= self.TRAIL_START_R else "breakeven",
+                )
+            else:
+                log.warning("manage: dời SL %s #%s fail: %s", p.symbol, p.ticket,
+                            getattr(result, "retcode", None))
+        return moved
+
     def sync_outcomes(self, journal: Journal) -> int:
         """Lệnh mở trong journal mà MT5 không còn giữ position → đã đóng, ghi P&L thật."""
         mt5 = self._mt5()

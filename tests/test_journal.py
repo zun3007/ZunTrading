@@ -179,3 +179,21 @@ def test_setup_stats_isolated_by_symbol_and_setup(j):
     place(j, pnl=100.0)  # XAUUSD pullback_trend
     assert j.setup_stats("EURUSD", "pullback_trend")["n"] == 0
     assert j.setup_stats("XAUUSD", "breakout")["n"] == 0
+
+
+def test_weekly_digest_aggregates(j):
+    place(j, pnl=150.0)
+    place(j, pnl=-100.0)
+    bad = Verdict(approved=False, lots=0.0, risk_amount=0.0, reject_reasons=["R6: conf thấp"])
+    j.record_signal(CAND, SIG, bad)
+    d = j.weekly_digest()
+    assert d["signals_total"] == 3 and d["signals_approved"] == 2
+    perf = d["performance"][0]
+    assert perf["symbol"] == "XAUUSD" and perf["n"] == 2 and perf["wins"] == 1
+    assert perf["pnl"] == 50.0
+    assert d["top_rejects"][0]["n"] == 1
+
+
+def test_open_positions_carry_direction(j):
+    place(j)
+    assert j.open_positions()[0].direction == "long"

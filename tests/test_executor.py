@@ -110,6 +110,7 @@ def test_paper_sync_price_lookup_failure_keeps_open(j):
 
 class FakeMT5:
     TRADE_ACTION_DEAL = 1
+    TRADE_ACTION_SLTP = 6
     TRADE_ACTION_PENDING = 5
     ORDER_TYPE_BUY = 0
     ORDER_TYPE_SELL = 1
@@ -164,7 +165,8 @@ class FakeMT5:
 
     def order_send(self, request):
         self.sent.append(request)
-        return SimpleNamespace(retcode=self.retcode, order=777, price=request["price"], comment="ok")
+        return SimpleNamespace(retcode=self.retcode, order=777,
+                               price=request.get("price"), comment="ok")
 
     def positions_get(self, ticket=None):
         return []  # không còn mở
@@ -339,6 +341,73 @@ def test_sync_pending_still_waiting_keeps_open(fake_mt5, tmp_path, j):
     j.record_order(sid, "mt5", "888", XAU.mt5, XAU.market, SIG, 0.25, 100.0)
     assert ex.sync_outcomes(j) == 0
     assert len(j.open_positions(executor="mt5")) == 1  # vẫn chờ
+
+
+# --- breakeven / trailing ---
+
+def make_position(ticket=777, symbol="XAUUSD", price_open=2000.0, price_current=2000.0,
+                  sl=1996.0, tp=2008.0, ptype=0, magic=20260611):
+    return SimpleNamespace(ticket=ticket, symbol=symbol, price_open=price_open,
+                           price_current=price_current, sl=sl, tp=tp, type=ptype, magic=magic)
+
+
+def seed_mt5_order(j, ticket="777"):
+    sid = j.record_signal(CAND, SIG, OK)
+    j.record_order(sid, "mt5", ticket, "XAUUSD", "gold", SIG, 0.25, 100.0)
+
+
+def test_manage_breakeven_at_1r(fake_mt5, tmp_path, j, monkeypatch):
+    # risk 4 (2000→1996); giá 2004 = +1R → SL dời về entry 2000
+    monkeypatch.setattr(fake_mt5, "positions_get",
+                        lambda **kw: [make_position(price_current=2004.0)])
+    seed_mt5_order(j)
+    ex = MT5Executor(mt5_settings(tmp_path))
+    assert ex.manage_positions(j) == 1
+    req = fake_mt5.sent[-1]
+    assert req["action"] == FakeMT5.TRADE_ACTION_SLTP and req["sl"] == 2000.0
+
+
+def test_manage_below_1r_untouched(fake_mt5, tmp_path, j, monkeypatch):
+    monkeypatch.setattr(fake_mt5, "positions_get",
+                        lambda **kw: [make_position(price_current=2003.0)])  # +0.75R
+    seed_mt5_order(j)
+    assert MT5Executor(mt5_settings(tmp_path)).manage_positions(j) == 0
+    assert fake_mt5.sent == []
+
+
+def test_manage_trailing_at_2r_only_forward(fake_mt5, tmp_path, j, monkeypatch):
+    # +2.5R (giá 2010): trailing SL = 2010 - 4 = 2006; position.sl đã ở 2000 → dời lên
+    monkeypatch.setattr(fake_mt5, "positions_get",
+                        lambda **kw: [make_position(price_current=2010.0, sl=2000.0)])
+    seed_mt5_order(j)
+    ex = MT5Executor(mt5_settings(tmp_path))
+    assert ex.manage_positions(j) == 1
+    assert fake_mt5.sent[-1]["sl"] == 2006.0
+    # giá tụt về 2008: candidate 2004 < SL hiện tại 2006 → KHÔNG lùi
+    fake_mt5.sent.clear()
+    monkeypatch.setattr(fake_mt5, "positions_get",
+                        lambda **kw: [make_position(price_current=2008.0, sl=2006.0)])
+    assert ex.manage_positions(j) == 0
+
+
+def test_manage_short_breakeven(fake_mt5, tmp_path, j, monkeypatch):
+    sig = Signal(action="trade", direction="short", entry=2000.0, sl=2004.0, tp=1992.0,
+                 confidence=0.75, reason="t")
+    sid = j.record_signal(CAND, sig, OK)
+    j.record_order(sid, "mt5", "778", "XAUUSD", "gold", sig, 0.25, 100.0)
+    monkeypatch.setattr(fake_mt5, "positions_get",
+                        lambda **kw: [make_position(ticket=778, price_current=1996.0,
+                                                    sl=2004.0, ptype=1)])  # +1R short
+    ex = MT5Executor(mt5_settings(tmp_path))
+    assert ex.manage_positions(j) == 1
+    assert fake_mt5.sent[-1]["sl"] == 2000.0
+
+
+def test_manage_ignores_non_bot_positions(fake_mt5, tmp_path, j, monkeypatch):
+    monkeypatch.setattr(fake_mt5, "positions_get",
+                        lambda **kw: [make_position(price_current=2004.0, magic=0)])  # lệnh tay user
+    seed_mt5_order(j)
+    assert MT5Executor(mt5_settings(tmp_path)).manage_positions(j) == 0
 
 
 def test_sync_expired_pending_marked_failed(fake_mt5, tmp_path, j, monkeypatch):

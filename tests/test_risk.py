@@ -225,6 +225,40 @@ def test_r2_under_cap_passes():
     ok(run(open_pos=[OpenPosition("EURUSD", "forex", 120.0)]))  # 120+100=220 ≤ 300
 
 
+# --- R9: correlation guard ---
+
+def test_r9_same_cluster_same_direction_rejected():
+    # đã long USOIL → long UKOIL (cùng cụm energy) = double risk một ý tưởng
+    oil_sym = SymbolConfig(mt5="UKOIL", market="energy", session="forex", yfinance="BZ=F",
+                           binance=None, value_per_point=1000, lot_step=0.01, min_lot=0.01, max_lot=5)
+    v = evaluate(
+        sig(entry=70.0, sl=69.5, tp=71.0), oil_sym, 10_000,
+        [OpenPosition("USOIL", "energy", 50.0, "long")], TodayStats(), 0.65, SETTINGS,
+    )
+    rejected(v, "R9")
+
+
+def test_r9_metals_cluster_gold_blocks_silver():
+    silver = SymbolConfig(mt5="XAGUSD", market="silver", session="forex", yfinance="SI=F",
+                          binance=None, value_per_point=5000, lot_step=0.01, min_lot=0.01, max_lot=5)
+    v = evaluate(
+        sig(entry=31.0, sl=30.8, tp=31.5), silver, 10_000,
+        [OpenPosition("XAUUSD", "gold", 50.0, "long")], TodayStats(), 0.65, SETTINGS,
+    )
+    rejected(v, "R9")
+
+
+def test_r9_opposite_direction_allowed():
+    # cùng cụm nhưng NGƯỢC chiều = hedge, không phải chồng ý tưởng
+    v = run(sig(direction="short", entry=2000.0, sl=2004.0, tp=1992.0),
+            open_pos=[OpenPosition("XAGUSD", "silver", 50.0, "long")])
+    ok(v)
+
+
+def test_r9_different_cluster_allowed():
+    ok(run(open_pos=[OpenPosition("USOIL", "energy", 50.0, "long")]))  # gold vs energy
+
+
 # --- combo: R5 thắng dù mọi thứ khác đẹp ---
 
 def test_combo_r5_blocks_perfect_signal():
