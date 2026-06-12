@@ -120,6 +120,11 @@ class Journal:
         self.conn.execute("UPDATE orders SET status='closed' WHERE id=?", (order_id,))
         self.conn.commit()
 
+    def mark_order_failed(self, order_id: int) -> None:
+        """Pending limit hết hạn/hủy — đóng sổ không outcome (không phải thắng/thua)."""
+        self.conn.execute("UPDATE orders SET status='failed' WHERE id=?", (order_id,))
+        self.conn.commit()
+
     def heartbeat(self, profile: str, scanned: int, candidates: int, signals: int, errors: int) -> None:
         self.conn.execute(
             "INSERT INTO heartbeats (ts_utc, profile, scanned, candidates, signals, errors)"

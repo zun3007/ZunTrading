@@ -142,7 +142,10 @@ def _process_symbol(
             continue
 
         stats.signals_approved += 1
-        res = executor.place(sig, sym, verdict.lots)
+        res = executor.place(
+            sig, sym, verdict.lots,
+            atr=cand.atr, limit_expiry_min=profile.scan_interval_minutes * 2,
+        )
         if not res.ok:
             stats.errors += 1
             log.error("%s: đặt lệnh FAIL: %s", cand.symbol, res.message)

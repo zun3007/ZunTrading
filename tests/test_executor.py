@@ -110,9 +110,13 @@ def test_paper_sync_price_lookup_failure_keeps_open(j):
 
 class FakeMT5:
     TRADE_ACTION_DEAL = 1
+    TRADE_ACTION_PENDING = 5
     ORDER_TYPE_BUY = 0
     ORDER_TYPE_SELL = 1
+    ORDER_TYPE_BUY_LIMIT = 2
+    ORDER_TYPE_SELL_LIMIT = 3
     ORDER_TIME_GTC = 0
+    ORDER_TIME_SPECIFIED = 2
     ORDER_FILLING_IOC = 2
     ORDER_FILLING_FOK = 1
     ORDER_FILLING_RETURN = 3
@@ -126,6 +130,7 @@ class FakeMT5:
         self.login_ok = True
         self.margin_free = 10_000.0
         self.margin_needed = 50.0
+        self.pending_tickets = False
 
     def initialize(self, **kw):
         return True
@@ -163,6 +168,9 @@ class FakeMT5:
 
     def positions_get(self, ticket=None):
         return []  # không còn mở
+
+    def orders_get(self, ticket=None):
+        return self.pending_tickets and [SimpleNamespace(ticket=ticket)] or []
 
     def history_deals_get(self, position=None):
         return [
@@ -280,3 +288,65 @@ def test_mt5_margin_guard_blocks_oversized_order(fake_mt5, tmp_path):
 def test_mt5_margin_guard_passes_normal_order(fake_mt5, tmp_path):
     ex = MT5Executor(mt5_settings(tmp_path))
     assert ex.place(SIG, XAU, 0.25).ok
+
+
+# --- retest limit orders ---
+
+def test_entry_near_market_uses_market_order(fake_mt5, tmp_path):
+    # entry 2000, ask 2000.5 → lệch 0.5 < 0.10*ATR(8)=0.8 → market
+    ex = MT5Executor(mt5_settings(tmp_path))
+    res = ex.place(SIG, XAU, 0.25, atr=8.0, limit_expiry_min=30)
+    assert res.ok and fake_mt5.sent[0]["action"] == FakeMT5.TRADE_ACTION_DEAL
+
+
+def test_entry_below_market_places_buy_limit_with_expiry(fake_mt5, tmp_path):
+    # não muốn retest: entry 1995 < ask 2000.5, lệch 5.5 > 0.8 → BUY_LIMIT pending
+    sig = Signal(action="trade", direction="long", entry=1995.0, sl=1990.0, tp=2005.0,
+                 confidence=0.8, reason="chờ retest ema20")
+    ex = MT5Executor(mt5_settings(tmp_path))
+    res = ex.place(sig, XAU, 0.25, atr=8.0, limit_expiry_min=30)
+    assert res.ok and "retest" in res.message
+    req = fake_mt5.sent[0]
+    assert req["action"] == FakeMT5.TRADE_ACTION_PENDING
+    assert req["type"] == FakeMT5.ORDER_TYPE_BUY_LIMIT
+    assert req["price"] == 1995.0 and req["sl"] == 1990.0 and req["tp"] == 2005.0
+    assert req["type_time"] == FakeMT5.ORDER_TIME_SPECIFIED
+    assert req["expiration"] > 0
+
+
+def test_entry_above_market_short_places_sell_limit(fake_mt5, tmp_path):
+    sig = Signal(action="trade", direction="short", entry=2006.0, sl=2012.0, tp=1994.0,
+                 confidence=0.8, reason="retest kháng cự")
+    ex = MT5Executor(mt5_settings(tmp_path))
+    res = ex.place(sig, XAU, 0.1, atr=8.0)
+    assert res.ok
+    assert fake_mt5.sent[0]["type"] == FakeMT5.ORDER_TYPE_SELL_LIMIT
+
+
+def test_entry_wrong_side_falls_back_to_market(fake_mt5, tmp_path):
+    # long nhưng entry TRÊN giá (2010 > ask 2000.5) — không phải limit hợp lệ → market
+    sig = Signal(action="trade", direction="long", entry=2010.0, sl=2002.0, tp=2025.0,
+                 confidence=0.8, reason="t")
+    ex = MT5Executor(mt5_settings(tmp_path))
+    res = ex.place(sig, XAU, 0.25, atr=8.0)
+    assert res.ok and fake_mt5.sent[0]["action"] == FakeMT5.TRADE_ACTION_DEAL
+
+
+def test_sync_pending_still_waiting_keeps_open(fake_mt5, tmp_path, j):
+    fake_mt5.pending_tickets = True  # orders_get trả pending còn treo
+    ex = MT5Executor(mt5_settings(tmp_path))
+    sid = j.record_signal(CAND, SIG, OK)
+    j.record_order(sid, "mt5", "888", XAU.mt5, XAU.market, SIG, 0.25, 100.0)
+    assert ex.sync_outcomes(j) == 0
+    assert len(j.open_positions(executor="mt5")) == 1  # vẫn chờ
+
+
+def test_sync_expired_pending_marked_failed(fake_mt5, tmp_path, j, monkeypatch):
+    monkeypatch.setattr(fake_mt5, "history_deals_get", lambda position=None: [])
+    ex = MT5Executor(mt5_settings(tmp_path))
+    sid = j.record_signal(CAND, SIG, OK)
+    oid = j.record_order(sid, "mt5", "999", XAU.mt5, XAU.market, SIG, 0.25, 100.0)
+    assert ex.sync_outcomes(j) == 0
+    row = j.conn.execute("SELECT status FROM orders WHERE id=?", (oid,)).fetchone()
+    assert row["status"] == "failed"  # đóng sổ, không phải outcome thắng/thua
+    assert j.open_positions(executor="mt5") == []  # hết chiếm slot risk

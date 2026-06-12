@@ -54,7 +54,11 @@ class PaperExecutor:
     def value_per_point(self, sym: SymbolConfig) -> float | None:
         return None  # dùng giá trị config
 
-    def place(self, sig: Signal, sym: SymbolConfig, lots: float) -> ExecutionResult:
+    def place(
+        self, sig: Signal, sym: SymbolConfig, lots: float,
+        atr: float | None = None, limit_expiry_min: int = 30,
+    ) -> ExecutionResult:
+        # paper giả định limit luôn khớp tại entry — mô phỏng lạc quan, ghi chú trong spec
         self._seq += 1
         ticket = f"paper-{self._seq}"
         return ExecutionResult(True, ticket, sig.entry, "paper fill tại entry")
@@ -192,7 +196,15 @@ class MT5Executor:
             return mt5.ORDER_FILLING_FOK
         return mt5.ORDER_FILLING_RETURN
 
-    def place(self, sig: Signal, sym: SymbolConfig, lots: float) -> ExecutionResult:
+    LIMIT_MIN_ATR = 0.10  # entry lệch giá thị trường quá mức này (theo ATR) → treo limit chờ retest
+
+    def place(
+        self, sig: Signal, sym: SymbolConfig, lots: float,
+        atr: float | None = None, limit_expiry_min: int = 30,
+    ) -> ExecutionResult:
+        """Đặt lệnh: market khi entry sát giá; PENDING LIMIT chờ retest khi não đặt
+        entry xa giá hiện tại đúng phía (long: dưới giá, short: trên giá) — cách
+        trader xử lý breakout muộn: không đuổi đỉnh, treo lệnh chờ giá quay lại."""
         mt5 = self._mt5()
         if not mt5.symbol_select(sym.mt5, True):
             return ExecutionResult(False, None, None, f"symbol {sym.mt5} không có trên server")
@@ -200,8 +212,16 @@ class MT5Executor:
         if tick is None:
             return ExecutionResult(False, None, None, f"không có tick cho {sym.mt5}")
         is_long = sig.direction == "long"
+        market_price = float(tick.ask if is_long else tick.bid)
+
+        # retest-limit: entry đúng phía limit và lệch đáng kể so với giá
+        limit_side_ok = (sig.entry < market_price) if is_long else (sig.entry > market_price)
+        far = atr and abs(sig.entry - market_price) > self.LIMIT_MIN_ATR * atr
+        if limit_side_ok and far:
+            return self._place_pending_limit(mt5, sig, sym, lots, limit_expiry_min)
+
         order_type = mt5.ORDER_TYPE_BUY if is_long else mt5.ORDER_TYPE_SELL
-        price = float(tick.ask if is_long else tick.bid)
+        price = market_price
         # margin guard: không ăn quá 80% free margin — thiếu margin để server reject là quá muộn
         try:
             need = mt5.order_calc_margin(order_type, sym.mt5, float(lots), price)
@@ -236,6 +256,43 @@ class MT5Executor:
             )
         return ExecutionResult(True, str(result.order), float(result.price), "filled")
 
+    def _place_pending_limit(
+        self, mt5, sig: Signal, sym: SymbolConfig, lots: float, expiry_min: int
+    ) -> ExecutionResult:
+        from datetime import UTC, datetime, timedelta
+
+        is_long = sig.direction == "long"
+        expiration = datetime.now(UTC) + timedelta(minutes=expiry_min)
+        request = {
+            "action": mt5.TRADE_ACTION_PENDING,
+            "symbol": sym.mt5,
+            "volume": float(lots),
+            "type": mt5.ORDER_TYPE_BUY_LIMIT if is_long else mt5.ORDER_TYPE_SELL_LIMIT,
+            "price": float(sig.entry),
+            "sl": float(sig.sl),
+            "tp": float(sig.tp),
+            "magic": MAGIC,
+            "comment": "ZunTrading-retest",
+            "type_time": mt5.ORDER_TIME_SPECIFIED,
+            "expiration": int(expiration.timestamp()),
+            "type_filling": self._filling_mode(mt5, sym.mt5),
+        }
+        result = mt5.order_send(request)
+        if result is None:
+            return ExecutionResult(False, None, None, f"pending order_send None: {mt5.last_error()}")
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            return ExecutionResult(
+                False, None, None,
+                f"pending retcode {result.retcode}: {getattr(result, 'comment', '')}",
+            )
+        log.info(
+            "pending LIMIT %s %s @ %s (chờ retest, hết hạn %d')",
+            sig.direction, sym.mt5, sig.entry, expiry_min,
+        )
+        return ExecutionResult(
+            True, str(result.order), None, f"limit chờ retest @ {sig.entry:g} (hết hạn {expiry_min}')"
+        )
+
     def sync_outcomes(self, journal: Journal) -> int:
         """Lệnh mở trong journal mà MT5 không còn giữ position → đã đóng, ghi P&L thật."""
         mt5 = self._mt5()
@@ -246,9 +303,13 @@ class MT5Executor:
             ticket = int(row["ticket"])
             if mt5.positions_get(ticket=ticket):
                 continue  # vẫn mở
+            if mt5.orders_get(ticket=ticket):
+                continue  # pending limit còn treo chờ retest
             deals = mt5.history_deals_get(position=ticket)
             if not deals:
-                log.warning("mt5 sync: ticket %s không còn position nhưng chưa thấy deal", ticket)
+                # không position, không pending, không deal → pending hết hạn/bị hủy
+                journal.mark_order_failed(row["id"])
+                log.info("mt5 sync: pending #%s (%s) hết hạn không khớp — đóng sổ", row["id"], row["symbol"])
                 continue
             pnl = sum(float(d.profit) + float(d.swap) + float(d.commission) for d in deals)
             exit_deals = [d for d in deals if d.entry == mt5.DEAL_ENTRY_OUT]

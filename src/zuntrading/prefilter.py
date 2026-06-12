@@ -74,6 +74,9 @@ def _detect_range_edge(last: pd.Series) -> str | None:
     return None
 
 
+BREAKOUT_FRESH_ATR = 0.75  # close quá xa swing = breakout cũ, đuổi theo là chase đỉnh
+
+
 def _detect_breakout(df_entry: pd.DataFrame) -> str | None:
     if len(df_entry) < 4:
         return None
@@ -81,12 +84,13 @@ def _detect_breakout(df_entry: pd.DataFrame) -> str | None:
     adx_rising = last["adx14"] > df_entry["adx14"].iloc[-4] and last["adx14"] > ADX_BREAKOUT_MIN
     if not adx_rising:
         return None
-    # so với swing của NẾN TRƯỚC (mức đã tồn tại trước cú phá)
+    # so với swing của NẾN TRƯỚC (mức đã tồn tại trước cú phá); chỉ nhận breakout TƯƠI
+    fresh = BREAKOUT_FRESH_ATR * last["atr14"]
     prev_sh = df_entry["swing_high"].iloc[-2]
     prev_sl = df_entry["swing_low"].iloc[-2]
-    if pd.notna(prev_sh) and last["close"] > prev_sh:
+    if pd.notna(prev_sh) and prev_sh < last["close"] <= prev_sh + fresh:
         return "long"
-    if pd.notna(prev_sl) and last["close"] < prev_sl:
+    if pd.notna(prev_sl) and prev_sl - fresh <= last["close"] < prev_sl:
         return "short"
     return None
 

@@ -119,7 +119,10 @@ def _run_claude(prompt: str, model: str, timeout: int) -> str | None:
         return None
     try:
         proc = subprocess.run(
-            [exe, "-p", prompt, "--model", model, "--output-format", "json"],
+            # --setting-sources "": cô lập khỏi settings/hooks của user trên máy —
+            # hook Stop/SessionEnd từng nhiễm cả exit code lẫn RESULT của não bot.
+            [exe, "-p", prompt, "--model", model, "--output-format", "json",
+             "--setting-sources", ""],
             capture_output=True,
             text=True,
             timeout=timeout,
