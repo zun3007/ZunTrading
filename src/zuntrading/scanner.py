@@ -83,10 +83,19 @@ def pick_executor(settings: Settings, journal: Journal, choice: str):
     return PaperExecutor(settings, journal)
 
 
-def _latest_hlc(sym: SymbolConfig):
-    df = get_candles(sym, "M15", 5)
-    row = df.iloc[-1]
-    return float(row["high"]), float(row["low"]), float(row["close"])
+def _hlc_lookup(settings: Settings):
+    """price_lookup cho paper sync: nhận TÊN symbol (string từ journal) → (high, low, close)."""
+    by_name = {s.mt5: s for s in settings.symbols}
+
+    def lookup(symbol: str):
+        sym = by_name.get(symbol)
+        if sym is None:
+            raise KeyError(f"{symbol} không còn trong config — không sync được giá")
+        df = get_candles(sym, "M15", 5)
+        row = df.iloc[-1]
+        return float(row["high"]), float(row["low"]), float(row["close"])
+
+    return lookup
 
 
 def _process_symbol(
@@ -167,7 +176,7 @@ def run_cycle(
         paper_sync = (
             executor if isinstance(executor, PaperExecutor) else PaperExecutor(settings, journal)
         )
-        stats.closed_by_sync = paper_sync.sync_outcomes(_latest_hlc)
+        stats.closed_by_sync = paper_sync.sync_outcomes(_hlc_lookup(settings))
         if not isinstance(executor, PaperExecutor):
             stats.closed_by_sync += executor.sync_outcomes(journal)
     except Exception as e:  # noqa: BLE001

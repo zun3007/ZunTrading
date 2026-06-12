@@ -170,6 +170,12 @@ def test_news_blackout_skips_symbol_before_data_fetch(wired, monkeypatch, j):
     assert wired["triage"] == 0        # càng không tốn token
 
 
+def test_paper_sync_resolves_symbol_string_no_error(wired, j):
+    run(j)  # mở 1 paper position XAUUSD
+    stats2 = run(j)  # cycle 2: dual-sync phải resolve "XAUUSD" (string) → SymbolConfig
+    assert stats2.errors == 0  # trước đây: 'str' object has no attribute 'mt5'
+
+
 def test_decide_receives_track_record(wired, monkeypatch, j):
     seen = {}
 
