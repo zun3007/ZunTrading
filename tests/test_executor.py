@@ -122,12 +122,19 @@ class FakeMT5:
     def __init__(self):
         self.sent = []
         self.retcode = self.TRADE_RETCODE_DONE
-        self.login = 12345  # khớp MT5_LOGIN trong fixture
+        self.current_login = 12345  # khớp MT5_LOGIN trong fixture
+        self.login_ok = True
         self.margin_free = 10_000.0
         self.margin_needed = 50.0
 
     def initialize(self, **kw):
         return True
+
+    def login(self, acc, password=None, server=None):
+        if self.login_ok:
+            self.current_login = acc  # mô phỏng terminal đổi account thành công
+            return True
+        return False
 
     def shutdown(self):
         return True
@@ -136,7 +143,7 @@ class FakeMT5:
         return (0, "ok")
 
     def account_info(self):
-        return SimpleNamespace(equity=10_000.0, login=self.login, margin_free=self.margin_free)
+        return SimpleNamespace(equity=10_000.0, login=self.current_login, margin_free=self.margin_free)
 
     def order_calc_margin(self, order_type, symbol, lots, price):
         return self.margin_needed
@@ -233,11 +240,25 @@ def test_mt5_missing_creds_raises(monkeypatch, tmp_path):
         ex.equity()
 
 
-def test_mt5_wrong_terminal_account_refused(fake_mt5, tmp_path):
-    fake_mt5.login = 88888  # terminal đang login account khác
+def test_mt5_wrong_account_switches_via_login(fake_mt5, tmp_path):
+    fake_mt5.current_login = 88888  # terminal đang ở account khác → executor login() để đổi
+    ex = MT5Executor(mt5_settings(tmp_path))
+    assert ex.equity() == 10_000.0  # đổi account OK, không respawn
+
+
+def test_mt5_wrong_account_and_login_fails_refused(fake_mt5, tmp_path):
+    fake_mt5.current_login = 88888
+    fake_mt5.login_ok = False  # đổi account FAIL → từ chối đặt lệnh
     ex = MT5Executor(mt5_settings(tmp_path))
     with pytest.raises(ExecutorUnavailable, match="88888"):
         ex.equity()
+
+
+def test_mt5_attach_correct_account_no_relogin(fake_mt5, tmp_path):
+    # account đã đúng sẵn → không gọi login() (tránh trigger algo-disable)
+    ex = MT5Executor(mt5_settings(tmp_path))
+    assert ex.equity() == 10_000.0
+    assert fake_mt5.current_login == 12345  # không bị đổi — không re-login
 
 
 def test_mt5_live_mode_requires_live_creds(fake_mt5, tmp_path, monkeypatch):

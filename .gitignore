@@ -18,3 +18,4 @@ logs/
 *.log
 src/*.egg-info/
 data/
+.venv*/

@@ -128,12 +128,31 @@ class MT5Executor:
         return creds
 
     def _mt5(self):
+        """Attach NHẸ trước (không re-login). Re-login mỗi lần khiến terminal coi là
+        'account changed' và TỰ TẮT algo trading → IPC chết. Chỉ login khi account lệch."""
         try:
             import MetaTrader5 as mt5
         except ImportError as e:
             raise ExecutorUnavailable("package MetaTrader5 chưa cài") from e
         if not self._connected:
             creds = self._creds()
+            attached = mt5.initialize()  # attach vào terminal đang chạy, KHÔNG đổi account
+            info = mt5.account_info() if attached else None
+            if info is not None and int(info.login) == int(creds.login):
+                self._connected = True  # đúng account sẵn rồi — không re-login
+                return mt5
+            if attached:
+                # terminal chạy nhưng sai account → đổi bằng login() (không respawn)
+                if mt5.login(int(creds.login), password=creds.password, server=creds.server):
+                    self._connected = True
+                    return mt5
+                got = getattr(info, "login", None)
+                mt5.shutdown()
+                raise ExecutorUnavailable(
+                    f"terminal ở account {got}, login {creds.login} ({self.mode}) fail: "
+                    f"{mt5.last_error()} — từ chối đặt lệnh"
+                )
+            # terminal chưa chạy → spawn + login đầy đủ (1 lần duy nhất)
             ok = mt5.initialize(
                 login=int(creds.login), password=creds.password, server=creds.server
             )
