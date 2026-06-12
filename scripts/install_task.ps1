@@ -6,7 +6,7 @@ param([switch]$Unregister)
 $ErrorActionPreference = "Stop"
 $repo = Split-Path $PSScriptRoot -Parent
 $python = (Get-Command python).Source
-$names = @("ZunTrading-Scan-Day", "ZunTrading-Scan-Swing", "ZunTrading-Report")
+$names = @("ZunTrading-Scan-Day", "ZunTrading-Scan-Swing", "ZunTrading-Report", "ZunTrading-Sync")
 
 if ($Unregister) {
     foreach ($n in $names) {
@@ -40,6 +40,10 @@ Register-ZunTask "ZunTrading-Scan-Swing" "-m zuntrading.scanner --profile swing 
 
 Register-ZunTask "ZunTrading-Report" "-m zuntrading.reporter" `
     (New-ScheduledTaskTrigger -Daily -At "21:00")
+
+# Sync 5': chốt outcome lệnh đóng/pending hết hạn — không scan, không tốn não
+Register-ZunTask "ZunTrading-Sync" "-m zuntrading.scanner --sync-only --executor auto" `
+    (New-ScheduledTaskTrigger -Once -At $now.AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650))
 
 Write-Host ""
 Write-Host "Xong. Kiểm tra: Get-ScheduledTask -TaskName 'ZunTrading-*'" -ForegroundColor Green
