@@ -132,6 +132,54 @@ claude setup-token    # tạo token dài hạn cho headless (cần Claude subscr
 
 Kiểm tra: `claude -p "hi" --output-format json` → thấy `"is_error":false` là não sống. Rồi chạy `python -m pytest -m live -q` → `2 passed`.
 
+## Setup máy mới chạy LIVE (checklist đầy đủ, ~30 phút)
+
+> Đọc một lần trước khi làm: bot live = tiền thật. Risk profile khuyến nghị cho
+> tài khoản chưa có track record: **Cân bằng** (1%/lệnh, dừng ngày 3%).
+
+```powershell
+# 1. Cài nền (PowerShell admin):
+winget install Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
+winget install Git.Git --silent
+npm install -g @anthropic-ai/claude-code    # hoặc installer native từ claude.com/code
+
+# 2. Não Claude (1 lần):
+claude setup-token        # đăng nhập → copy token sk-ant-oat01-...
+
+# 3. MetaTrader 5 — BẮT BUỘC BẢN EXNESS (bản MetaQuotes generic bị lỗi IPC với Python):
+#    Đăng nhập exness.com (Personal Area) → Platforms → tải "MetaTrader 5" → cài
+#    Mở MT5 → File → Login to Trade Account → login/password/server tài khoản LIVE
+#    (server dạng Exness-MT5Real..., xem trong email/Personal Area)
+#    Tools → Options → Expert Advisors → tick "Allow algorithmic trading"
+#    Để MT5 chạy thường trực.
+
+# 4. Code + deps:
+git clone https://github.com/zun3007/ZunTrading.git D:\ZunTrading; cd D:\ZunTrading
+pip install -r requirements.txt; pip install -r requirements-mt5.txt; pip install -e .
+
+# 5. Secrets — KHÔNG copy .env từ máy cũ qua mạng, điền mới:
+Copy-Item .env.example .env; notepad .env
+#    CLAUDE_CODE_OAUTH_TOKEN= (từ bước 2)
+#    MT5_LOGIN/MT5_PASSWORD/MT5_SERVER= tài khoản DEMO (bot mặc định demo — giữ làm lưới an toàn)
+#    MT5_LIVE_LOGIN/MT5_LIVE_PASSWORD/MT5_LIVE_SERVER= tài khoản LIVE
+
+# 6. Verify từng tầng (PHẢI pass hết mới đi tiếp):
+python -m pytest -q                  # ~230 tests
+python -m pytest -m live -q         # não + data thật
+python -m zuntrading.scanner --profile day --dry-run   # pipeline + errors=0
+
+# 7. Bật hệ thống:
+.\scripts\install_task.ps1           # 5 scheduled tasks
+.\scripts\run_ui.ps1                 # dashboard http://127.0.0.1:8420
+
+# 8. Chuyển LIVE — bước duy nhất không có lệnh nào làm thay:
+#    Dashboard → click badge DEMO → đọc số liệu demo + cảnh báo → gõ "TRADE LIVE"
+#    → badge đỏ LIVE + viền đỏ = bot đang trade tiền thật.
+#    Đề xuất: panel Risk gate → chọn "Cân bằng" trước khi chuyển.
+```
+
+Máy cần: bật 24/7 (tắt Sleep trong Power settings), MT5 mở thường trực. Kiểm tra sức khỏe: dashboard Heartbeat cuối < 15 phút.
+
 ## Đem lên GitHub / cài máy khác
 
 Repo đã portable: không hardcode path, secrets nằm trong `.env` (gitignored), chart lib vendored, line-endings chuẩn hóa qua `.gitattributes`.

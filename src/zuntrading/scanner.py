@@ -70,6 +70,11 @@ def pick_executor(settings: Settings, journal: Journal, choice: str):
         ex = MT5Executor(settings, "live")
         ex.equity()  # raise ExecutorUnavailable nếu không sẵn sàng → abort cycle
         log.info("executor=mt5 LIVE (login %s)", settings.mt5_live.login)
+        if settings.risk_profile_name == "mao_hiem":
+            log.warning(
+                "⚠ LIVE + profile MẠO HIỂM: risk tới 4.5%%/lệnh TIỀN THẬT, dừng ngày 8%%. "
+                "Khuyến nghị live chưa có track record: chuyển 'can_bang' trên dashboard."
+            )
         return ex
     if settings.mt5.present:
         try:
