@@ -59,6 +59,7 @@ def wired(monkeypatch, j):
     calls = {"triage": 0, "decide": 0, "sent": []}
     monkeypatch.setattr(scanner, "get_candles", fake_candles)
     monkeypatch.setattr(scanner, "market_open", lambda session, now=None: True)
+    monkeypatch.setattr(scanner, "scan_window_open", lambda sym, now=None: True)
     monkeypatch.setattr(scanner, "find_candidates", lambda *a, **k: [CAND])
     monkeypatch.setattr(
         scanner.brain, "triage",

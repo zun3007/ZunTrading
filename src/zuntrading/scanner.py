@@ -19,7 +19,7 @@ from pathlib import Path
 from . import brain, mode, notify
 from .calibration import threshold_for
 from .config import Settings, SymbolConfig, load_settings
-from .data import get_candles, market_open
+from .data import get_candles, market_open, scan_window_open
 from .executor import ExecutorUnavailable, MT5Executor, PaperExecutor
 from .indicators import enrich
 from .journal import Journal
@@ -204,6 +204,8 @@ def run_cycle(
     for sym in settings.symbols:
         if not market_open(sym.session):
             continue
+        if not scan_window_open(sym):
+            continue  # ngoài giờ vàng của symbol — không đốt não cho chợ ngủ
         if settings.news.enabled:
             ev = news_blackout(sym, settings.news.window_minutes)
             if ev:

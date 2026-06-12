@@ -58,6 +58,7 @@ markets:
   gold:
     enabled: true
     session: forex
+    scan_hours: "06:30-16:30"   # 13:30-23:30 VN — London + NY, 70%+ volume
     symbols:
       - mt5: XAUUSD
         yfinance: "GC=F"
@@ -69,6 +70,7 @@ markets:
   forex:
     enabled: true
     session: forex
+    scan_hours: "06:30-16:30"   # 13:30-23:30 VN — London + NY, 70%+ volume
     symbols:
       - mt5: EURUSD
         yfinance: "EURUSD=X"
@@ -87,6 +89,7 @@ markets:
       - mt5: USDJPY
         yfinance: "USDJPY=X"
         binance: null
+        scan_hours: "00:00-04:00,06:30-16:30"  # JPY ăn cả phiên Á sáng
         value_per_point: 650   # xấp xỉ USD; MT5 runtime dùng tick_value thật
         lot_step: 0.01
         min_lot: 0.01
@@ -112,6 +115,7 @@ markets:
   indices:
     enabled: true
     session: indices
+    scan_hours: "06:30-16:30"   # 13:30-23:30 VN — London + NY, 70%+ volume
     symbols:
       - mt5: USTEC
         yfinance: "^NDX"
@@ -130,6 +134,7 @@ markets:
   silver:
     enabled: true
     session: forex
+    scan_hours: "06:30-16:30"   # 13:30-23:30 VN — London + NY, 70%+ volume
     symbols:
       - mt5: XAGUSD
         yfinance: "SI=F"
@@ -141,6 +146,7 @@ markets:
   energy:
     enabled: true
     session: forex
+    scan_hours: "06:30-16:30"   # 13:30-23:30 VN — London + NY, 70%+ volume
     symbols:
       - mt5: USOIL
         yfinance: "CL=F"

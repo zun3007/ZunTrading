@@ -133,6 +133,32 @@ def test_market_open(session, dt, expected):
     assert market_open(session, dt) is expected
 
 
+# --- scan windows (giờ vàng per symbol) ---
+
+def make_sym(windows):
+    return SymbolConfig(
+        mt5="XAUUSD", market="gold", session="forex", yfinance="GC=F", binance=None,
+        value_per_point=100, lot_step=0.01, min_lot=0.01, max_lot=5, scan_windows=windows,
+    )
+
+
+@pytest.mark.parametrize(("windows", "hhmm", "expected"), [
+    ((), (3, 0), True),                            # không khai = 24/7
+    (((390, 990),), (7, 0), True),                 # 07:00 UTC trong London+NY
+    (((390, 990),), (3, 0), False),                # 03:00 UTC = phiên Á chết → skip
+    (((390, 990),), (16, 30), False),              # đúng giờ đóng cửa sổ — ngoài
+    (((0, 240), (390, 990)), (2, 0), True),        # USDJPY: phiên Á sáng vẫn scan
+    (((1320, 120),), (23, 30), True),              # window qua nửa đêm 22:00-02:00
+    (((1320, 120),), (1, 0), True),
+    (((1320, 120),), (3, 0), False),
+])
+def test_scan_window_open(windows, hhmm, expected):
+    from zuntrading.data import scan_window_open
+
+    now = datetime(2026, 6, 10, *hhmm, tzinfo=UTC)
+    assert scan_window_open(make_sym(windows), now) is expected
+
+
 # --- live smoke (chạy riêng: pytest -m live) ---
 
 @pytest.mark.live

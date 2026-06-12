@@ -174,6 +174,23 @@ def get_candles(
     raise DataUnavailable(f"{sym.mt5} {timeframe}: mọi source đều fail: {' | '.join(errors)}")
 
 
+def scan_window_open(sym, now: datetime | None = None) -> bool:
+    """Giờ ĐÁNG scan của symbol (tiết kiệm não giờ chết). Windows rỗng = luôn scan.
+
+    Window qua nửa đêm (start > end) được hỗ trợ, vd "22:00-02:00"."""
+    if not sym.scan_windows:
+        return True
+    now = now or datetime.now(UTC)
+    minute = now.hour * 60 + now.minute
+    for start, end in sym.scan_windows:
+        if start <= end:
+            if start <= minute < end:
+                return True
+        elif minute >= start or minute < end:  # qua nửa đêm
+            return True
+    return False
+
+
 def market_open(session: str, now: datetime | None = None) -> bool:
     """Giờ mở cửa xấp xỉ theo session (UTC). Crypto 24/7; forex/gold/indices 24/5.
 

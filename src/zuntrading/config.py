@@ -59,6 +59,24 @@ class SymbolConfig:
     lot_step: float
     min_lot: float
     max_lot: float
+    # Giờ ĐÁNG scan (UTC, "HH:MM-HH:MM,..."), None = 24/7. Khác market-hours (giờ chợ MỞ):
+    # chợ mở lúc phiên chết vẫn mở — nhưng scan lúc đó chỉ đốt token cho setup rác.
+    scan_windows: tuple = ()  # tuple[(start_min, end_min)] theo phút-trong-ngày UTC; rỗng = luôn scan
+
+
+def _parse_scan_hours(spec: str | None) -> tuple:
+    if not spec:
+        return ()
+    windows = []
+    for part in str(spec).split(","):
+        try:
+            a, b = part.strip().split("-")
+            h1, m1 = (int(x) for x in a.split(":"))
+            h2, m2 = (int(x) for x in b.split(":"))
+        except ValueError as e:
+            raise ValueError(f"Config error: scan_hours '{spec}' sai format HH:MM-HH:MM") from e
+        windows.append((h1 * 60 + m1, h2 * 60 + m2))
+    return tuple(windows)
 
 
 @dataclass(frozen=True)
@@ -206,6 +224,7 @@ def load_settings(
                 lot_step=float(s["lot_step"]),
                 min_lot=float(s["min_lot"]),
                 max_lot=float(s["max_lot"]),
+                scan_windows=_parse_scan_hours(s.get("scan_hours") or m.get("scan_hours")),
             )
             _require(sym.value_per_point > 0, f"{sym.mt5}: value_per_point > 0")
             _require(
