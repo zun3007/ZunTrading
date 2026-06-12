@@ -116,8 +116,8 @@ def _analyze_symbol(sym: SymbolConfig, profile_name: str, settings: Settings):
 
 
 def _brain_one(sym: SymbolConfig, cand, track: dict, settings: Settings):
-    """Phase B (thread-safe): triage + decide — chỉ LLM, journal đã đọc xong từ trước."""
-    if not brain.triage(cand, settings):
+    """Phase B (thread-safe): (triage tùy chọn) + decide — chỉ LLM, journal đọc xong từ trước."""
+    if settings.models.triage != "none" and not brain.triage(cand, settings):
         return sym, cand, None, "triage"
     sig = brain.decide(cand, settings, track_record=track)
     if sig is None:

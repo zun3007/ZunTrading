@@ -40,9 +40,13 @@ risk_profiles:
     confidence_sizing: true           # lệnh conf cao ăn size to hơn — trong trần, không phải LLM tự đặt
 
 models:
-  triage: sonnet       # lọc setup (nâng từ haiku theo yêu cầu — pre-filter code đã chặn đa số trước đó)
-  decision: opus       # quyết định cuối — model mạnh nhất ở đúng chỗ ăn tiền
-  timeout_seconds: 90  # opus suy nghĩ lâu hơn
+  # triage=none: BỎ tầng lọc LLM. Prefilter (code) đã lọc rác; Opus vừa giỏi nhất
+  # vừa NHANH NHẤT (benchmark: 30.5s vs sonnet 56.4s) nên cho nó quyết thẳng —
+  # nhanh ~2x mỗi candidate, và không candidate tốt nào bị loại oan trước khi Opus xem.
+  # Đặt 'haiku'/'sonnet' để bật lại tầng lọc rẻ nếu sau này cycle quá nhiều candidate.
+  triage: none
+  decision: opus       # quyết định cuối — model mạnh nhất, cũng là nhanh nhất
+  timeout_seconds: 90
 
 profiles:
   day:

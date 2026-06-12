@@ -101,8 +101,12 @@ def test_no_candidates_means_no_llm_calls(wired, monkeypatch, j):
 
 
 def test_triage_no_skips_decision(wired, monkeypatch, j):
+    # hành vi khi triage BẬT (sonnet) — bật lại để test tầng lọc chặn đúng
+    import dataclasses as dc
+    s_triage = dc.replace(SETTINGS, models=dc.replace(SETTINGS.models, triage="sonnet"))
     monkeypatch.setattr(scanner.brain, "triage", lambda c, s: False)
-    stats = run(j)
+    ex = PaperExecutor(s_triage, j)
+    stats = scanner.run_cycle("day", s_triage, j, ex)
     assert wired["decide"] == 0
     assert stats.signals_approved == 0 and stats.orders_placed == 0
 
@@ -175,6 +179,17 @@ def test_paper_sync_resolves_symbol_string_no_error(wired, j):
     run(j)  # mở 1 paper position XAUUSD
     stats2 = run(j)  # cycle 2: dual-sync phải resolve "XAUUSD" (string) → SymbolConfig
     assert stats2.errors == 0  # trước đây: 'str' object has no attribute 'mt5'
+
+
+def test_triage_none_skips_triage_goes_straight_to_decide(wired, monkeypatch, j):
+    import dataclasses as dc
+    no_triage = dc.replace(SETTINGS, models=dc.replace(SETTINGS.models, triage="none"))
+    monkeypatch.setattr(scanner.brain, "triage",
+                        lambda c, s: (_ for _ in ()).throw(AssertionError("triage KHÔNG được gọi")))
+    ex = PaperExecutor(no_triage, j)
+    stats = scanner.run_cycle("day", no_triage, j, ex)
+    assert wired["triage"] == 0          # triage bị bỏ qua hoàn toàn
+    assert stats.orders_placed == 1      # đi thẳng decide → lệnh vẫn vào
 
 
 def test_decide_receives_track_record(wired, monkeypatch, j):
