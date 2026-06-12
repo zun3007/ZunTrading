@@ -54,7 +54,10 @@ def test_load_real_repo_config():
     assert s.risk_profile_names == ["an_toan", "can_bang", "mao_hiem"]
     assert set(s.profiles) == {"day", "swing"}
     mt5_names = {sym.mt5 for sym in s.symbols}
-    assert mt5_names == {"XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD", "USTEC", "US30"}
+    assert mt5_names == {
+        "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD", "USTEC", "US30",
+        "XAGUSD", "USOIL", "UKOIL", "XNGUSD",
+    }
     # mọi symbol đều có fallback data source
     assert all(sym.yfinance or sym.binance for sym in s.symbols)
 

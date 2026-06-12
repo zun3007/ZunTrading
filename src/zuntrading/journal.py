@@ -160,6 +160,26 @@ class Journal:
     def open_orders_rows(self) -> list[sqlite3.Row]:
         return list(self.conn.execute("SELECT * FROM orders WHERE status='open'"))
 
+    def setup_stats(self, symbol: str, setup_type: str, last_n: int = 10) -> dict:
+        """Track record THẬT của bot với (symbol, setup_type) — trading memory cho não.
+
+        Não nhìn thấy chính lịch sử thắng/thua của nó trước khi quyết — setup từng
+        thua liên tục trên symbol này thì phải đòi hỏi chất lượng cao hơn hẳn."""
+        rows = self.conn.execute(
+            "SELECT oc.pnl, oc.result FROM outcomes oc"
+            " JOIN orders o ON o.id = oc.order_id"
+            " JOIN signals s ON s.id = o.signal_id"
+            " WHERE o.symbol = ? AND s.setup_type = ?"
+            " ORDER BY oc.ts_closed_utc DESC LIMIT ?",
+            (symbol, setup_type, last_n),
+        ).fetchall()
+        return {
+            "n": len(rows),
+            "wins": sum(1 for r in rows if r["result"] == "win"),
+            "losses": sum(1 for r in rows if r["result"] == "loss"),
+            "pnl": round(sum(r["pnl"] for r in rows), 2),
+        }
+
     def confidence_outcomes(self, market: str) -> list[tuple[float, bool]]:
         """[(confidence, win?)] của các lệnh ĐÃ ĐÓNG thuộc market — nguyên liệu calibration."""
         rows = self.conn.execute(

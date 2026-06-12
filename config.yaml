@@ -127,6 +127,48 @@ markets:
         lot_step: 0.01
         min_lot: 0.01
         max_lot: 10.0
+  silver:
+    enabled: true
+    session: forex
+    symbols:
+      - mt5: XAGUSD
+        yfinance: "SI=F"
+        binance: null
+        value_per_point: 5000   # tick_value 5 / tick_size 0.001 — verified từ Exness 2026-06-12
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 5.0
+  energy:
+    enabled: true
+    session: forex
+    symbols:
+      - mt5: USOIL
+        yfinance: "CL=F"
+        binance: null
+        value_per_point: 1000   # tick 1.0/0.001 — verified
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 5.0
+      - mt5: UKOIL
+        yfinance: "BZ=F"
+        binance: null
+        value_per_point: 1000
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 5.0
+      - mt5: XNGUSD
+        yfinance: "NG=F"
+        binance: null
+        value_per_point: 10000  # tick 1.0/0.0001
+        lot_step: 0.01
+        min_lot: 0.01
+        max_lot: 5.0
+
+# Né tin lớn (R8): không vào lệnh ±window phút quanh sự kiện HIGH-impact
+# của currency liên quan. Nguồn: ForexFactory weekly JSON, cache 4h, fail-open.
+news:
+  enabled: true
+  window_minutes: 30
 
 journal:
   db_path: data/zuntrading.db

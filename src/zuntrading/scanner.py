@@ -22,6 +22,7 @@ from .data import get_candles, market_open
 from .executor import ExecutorUnavailable, MT5Executor, PaperExecutor
 from .indicators import enrich
 from .journal import Journal
+from .news import news_blackout
 from .prefilter import find_candidates
 from .risk import evaluate
 
@@ -109,7 +110,8 @@ def _process_symbol(
         if not brain.triage(cand, settings):
             log.info("%s %s: triage bỏ", cand.symbol, cand.setup_type)
             continue
-        sig = brain.decide(cand, settings)
+        track = journal.setup_stats(cand.symbol, cand.setup_type)
+        sig = brain.decide(cand, settings, track_record=track)
         if sig is None:
             log.info("%s %s: decision không hợp lệ/timeout → bỏ", cand.symbol, cand.setup_type)
             continue
@@ -186,6 +188,11 @@ def run_cycle(
     for sym in settings.symbols:
         if not market_open(sym.session):
             continue
+        if settings.news.enabled:
+            ev = news_blackout(sym, settings.news.window_minutes)
+            if ev:
+                log.info("%s: NÉ TIN — %s (cửa sổ ±%d')", sym.mt5, ev, settings.news.window_minutes)
+                continue
         stats.scanned += 1
         try:
             _process_symbol(sym, profile_name, settings, journal, executor, equity, stats, dry_run)

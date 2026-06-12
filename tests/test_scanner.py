@@ -66,11 +66,12 @@ def wired(monkeypatch, j):
     )
     monkeypatch.setattr(
         scanner.brain, "decide",
-        lambda c, s: calls.__setitem__("decide", calls["decide"] + 1) or GOOD_SIG,
+        lambda c, s, **kw: calls.__setitem__("decide", calls["decide"] + 1) or GOOD_SIG,
     )
     monkeypatch.setattr(
         scanner.notify, "send", lambda text, s: calls["sent"].append(text) or True
     )
+    monkeypatch.setattr(scanner, "news_blackout", lambda sym, w, **kw: None)  # không network
     return calls
 
 
@@ -106,7 +107,7 @@ def test_triage_no_skips_decision(wired, monkeypatch, j):
 
 
 def test_decide_none_fails_closed(wired, monkeypatch, j):
-    monkeypatch.setattr(scanner.brain, "decide", lambda c, s: None)
+    monkeypatch.setattr(scanner.brain, "decide", lambda c, s, **kw: None)
     stats = run(j)
     assert stats.orders_placed == 0 and stats.errors == 0  # bỏ qua êm, không phải lỗi
 
@@ -114,14 +115,14 @@ def test_decide_none_fails_closed(wired, monkeypatch, j):
 def test_model_skip_recorded_nothing_placed(wired, monkeypatch, j):
     skip = Signal(action="skip", direction="long", entry=0, sl=0, tp=0,
                   confidence=0.8, reason="không rõ ràng")
-    monkeypatch.setattr(scanner.brain, "decide", lambda c, s: skip)
+    monkeypatch.setattr(scanner.brain, "decide", lambda c, s, **kw: skip)
     stats = run(j)
     assert stats.orders_placed == 0
 
 
 def test_risk_reject_recorded_no_order(wired, monkeypatch, j):
     low_conf = dataclasses.replace(GOOD_SIG, confidence=0.5)  # < default 0.65 → R6
-    monkeypatch.setattr(scanner.brain, "decide", lambda c, s: low_conf)
+    monkeypatch.setattr(scanner.brain, "decide", lambda c, s, **kw: low_conf)
     stats = run(j)
     assert stats.orders_placed == 0
     row = j.conn.execute("SELECT * FROM signals").fetchone()
@@ -155,3 +156,27 @@ def test_second_cycle_blocked_by_r4b_open_position(wired, j):
     assert stats2.orders_placed == 0
     rows = j.conn.execute("SELECT reject_reasons FROM signals WHERE approved=0").fetchall()
     assert any("R4b" in (r["reject_reasons"] or "") for r in rows)
+
+
+def test_news_blackout_skips_symbol_before_data_fetch(wired, monkeypatch, j):
+    monkeypatch.setattr(scanner, "news_blackout", lambda sym, w, **kw: "USD CPI @ 12:30 UTC")
+    fetches = {"n": 0}
+    monkeypatch.setattr(
+        scanner, "get_candles", lambda *a, **k: fetches.__setitem__("n", fetches["n"] + 1)
+    )
+    stats = run(j)
+    assert stats.scanned == 0          # symbol bị né hoàn toàn
+    assert fetches["n"] == 0           # không tốn cả data fetch
+    assert wired["triage"] == 0        # càng không tốn token
+
+
+def test_decide_receives_track_record(wired, monkeypatch, j):
+    seen = {}
+
+    def spy_decide(c, s, track_record=None):
+        seen["track"] = track_record
+        return GOOD_SIG
+
+    monkeypatch.setattr(scanner.brain, "decide", spy_decide)
+    run(j)
+    assert seen["track"] == {"n": 0, "wins": 0, "losses": 0, "pnl": 0.0}  # memory rỗng nhưng được truyền

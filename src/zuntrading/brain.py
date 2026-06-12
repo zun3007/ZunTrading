@@ -48,6 +48,9 @@ DECISION_PROMPT = """Bạn là trader kỷ luật, quản trị rủi ro là ưu
 Candidate (từ pre-filter kỹ thuật, giá và chỉ số là THẬT):
 {candidate}
 
+Track record THẬT của chính bạn với setup này trên symbol này (lệnh gần nhất): {track}
+Track record xấu → đòi hỏi setup phải RÕ RỆT hơn bình thường mới trade. Chưa có dữ liệu → trung lập.
+
 Nhiệm vụ: quyết định trade hay bỏ. Nếu trade, đặt entry/SL/TP dựa trên cấu trúc
 (swing, EMA, ATR={atr}). SL phải ở mức cấu trúc hợp lệ, không đặt bừa.
 Skip là quyết định tốt khi setup không đủ rõ — đa số candidate NÊN bị skip.
@@ -260,12 +263,24 @@ def triage(candidate: Candidate, settings: Settings) -> bool:
     return bool(obj.get("worth_analysis", False))
 
 
-def decide(candidate: Candidate, settings: Settings) -> Signal | None:
-    """Model mạnh ra quyết định cuối. Trả Signal đã validate, hoặc None."""
+def decide(
+    candidate: Candidate, settings: Settings, track_record: dict | None = None
+) -> Signal | None:
+    """Model mạnh ra quyết định cuối. Trả Signal đã validate, hoặc None.
+
+    track_record: trading memory từ journal.setup_stats — não thấy lịch sử của chính nó."""
+    if track_record and track_record.get("n"):
+        track = (
+            f"{track_record['n']} lệnh: {track_record['wins']} thắng, "
+            f"{track_record['losses']} thua, tổng P&L {track_record['pnl']:+.2f} USD"
+        )
+    else:
+        track = "chưa có dữ liệu (chưa từng trade setup này trên symbol này)"
     prompt = DECISION_PROMPT.format(
         candidate=json.dumps(asdict(candidate), ensure_ascii=False),
         atr=candidate.atr,
         direction=candidate.direction,
+        track=track,
     )
     text = _ask(prompt, settings.models.decision, settings)
     return parse_signal(text, candidate)

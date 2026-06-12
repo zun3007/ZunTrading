@@ -83,11 +83,18 @@ class MT5Credentials:
 
 
 @dataclass(frozen=True)
+class NewsConfig:
+    enabled: bool
+    window_minutes: int
+
+
+@dataclass(frozen=True)
 class Settings:
     reference_equity: float
     risk: RiskConfig
     risk_profile_name: str
     risk_profile_names: list[str]
+    news: NewsConfig
     models: ModelConfig
     profiles: dict[str, Profile]
     symbols: list[SymbolConfig]
@@ -212,11 +219,20 @@ def load_settings(
             symbols.append(sym)
     _require(len(symbols) > 0, "không có market nào enabled")
 
+    news_raw = raw.get("news", {})
+    news = NewsConfig(
+        enabled=bool(news_raw.get("enabled", False)),
+        window_minutes=int(news_raw.get("window_minutes", 30)),
+    )
+    _require(news.window_minutes >= 5, "news.window_minutes >= 5")
+
     return Settings(
         reference_equity=float(raw["account"]["reference_equity"]),
         risk=risk,
+        news=news,
         risk_profile_name=profile_name,
         risk_profile_names=sorted(raw.get("risk_profiles", {})),
+        # news đã gán ở trên
         models=models,
         profiles=profiles,
         symbols=symbols,

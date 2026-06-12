@@ -132,3 +132,20 @@ def test_calibration_winning_but_below_margin_keeps_default(j):
 def test_calibration_per_market_isolation(j):
     fill_outcomes(j, [(0.68, True)] * 25)  # toàn gold
     assert threshold_for(j, "forex", SETTINGS) == SETTINGS.risk.default_confidence
+
+
+# --- trading memory ---
+
+def test_setup_stats_empty_then_tracks(j):
+    assert j.setup_stats("XAUUSD", "pullback_trend") == {"n": 0, "wins": 0, "losses": 0, "pnl": 0.0}
+    place(j, pnl=150.0)
+    place(j, pnl=-100.0)
+    place(j, pnl=80.0)
+    s = j.setup_stats("XAUUSD", "pullback_trend")
+    assert s == {"n": 3, "wins": 2, "losses": 1, "pnl": 130.0}
+
+
+def test_setup_stats_isolated_by_symbol_and_setup(j):
+    place(j, pnl=100.0)  # XAUUSD pullback_trend
+    assert j.setup_stats("EURUSD", "pullback_trend")["n"] == 0
+    assert j.setup_stats("XAUUSD", "breakout")["n"] == 0
